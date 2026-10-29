@@ -11,7 +11,10 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -82,6 +85,35 @@ public final class DataJarFixtures {
             return MAPPER.writeValueAsBytes(sortKeys(release));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Changes a {@code snapshot.json} and returns it as compact JSON with sorted object keys, together with a
+     * {@code release.json} whose {@code revision} is the SHA-256 of the new snapshot bytes.
+     */
+    public static Metadata modifySnapshot(byte[] releaseJson, byte[] snapshotJson, Consumer<ObjectNode> change) {
+        try {
+            ObjectNode snapshot = (ObjectNode) MAPPER.readTree(snapshotJson);
+            change.accept(snapshot);
+            byte[] modifiedSnapshot = MAPPER.writeValueAsBytes(sortKeys(snapshot));
+            byte[] modifiedRelease = modifyRelease(releaseJson,
+                    release -> release.put("revision", "sha256:" + sha256Hex(modifiedSnapshot)));
+            return new Metadata(modifiedRelease, modifiedSnapshot);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** The two metadata files of one data JAR. */
+    public record Metadata(byte[] releaseJson, byte[] snapshotJson) {
+    }
+
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 

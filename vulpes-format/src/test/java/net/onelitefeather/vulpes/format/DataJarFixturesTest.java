@@ -61,6 +61,17 @@ final class DataJarFixturesTest {
     }
 
     @Test
+    void modifiedSnapshotIsReadWithRevisionOfItsNewBytes() {
+        DataJarFixtures.Metadata modified = DataJarFixtures.modifySnapshot(DataJarFixtures.releaseJson(),
+                DataJarFixtures.snapshotJson(), snapshot -> snapshot.put("namespace", "manis"));
+
+        ContentRelease content = ContentReader.read(PROJECT + "-" + VERSION + ".jar", modified.releaseJson(),
+                modified.snapshotJson());
+
+        assertEquals("manis", content.snapshot().namespace(), "namespace of the modified snapshot");
+    }
+
+    @Test
     void modifiedReleaseJsonIsCompactWithSortedKeys() {
         byte[] modified = DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(),
                 release -> release.put("version", "1.5.0"));
