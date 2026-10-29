@@ -6,9 +6,30 @@ plugins {
 
 dependencies {
     implementation(project(":vulpes-format"))
+
+    testImplementation(testFixtures(project(":vulpes-format")))
+}
+
+testing {
+    suites {
+        register<JvmTestSuite>("functionalTest") {
+            useJUnitJupiter(libs.versions.junit.get())
+            dependencies {
+                implementation(testFixtures(project(":vulpes-format")))
+                implementation(platform(libs.jackson.bom))
+                implementation(libs.jackson.databind)
+                implementation(gradleTestKit())
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(testing.suites.named("functionalTest"))
 }
 
 gradlePlugin {
+    testSourceSets(sourceSets["functionalTest"])
     plugins {
         create("vulpes") {
             id = "net.onelitefeather.vulpes"
