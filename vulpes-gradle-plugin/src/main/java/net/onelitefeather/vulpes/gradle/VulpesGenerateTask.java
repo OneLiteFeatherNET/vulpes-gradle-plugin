@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import net.onelitefeather.vulpes.codegen.ReleaseClassWriter;
 import net.onelitefeather.vulpes.format.ContentFormatException;
 import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;

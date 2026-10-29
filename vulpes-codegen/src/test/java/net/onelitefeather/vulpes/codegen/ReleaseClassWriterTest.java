@@ -1,4 +1,4 @@
-package net.onelitefeather.vulpes.gradle;
+package net.onelitefeather.vulpes.codegen;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertFalse;

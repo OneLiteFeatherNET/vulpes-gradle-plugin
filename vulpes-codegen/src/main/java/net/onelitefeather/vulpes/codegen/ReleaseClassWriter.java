@@ -1,4 +1,4 @@
-package net.onelitefeather.vulpes.gradle;
+package net.onelitefeather.vulpes.codegen;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -8,7 +8,7 @@ import net.onelitefeather.vulpes.format.Release;
 /**
  * Writes the Java source of the release constants of one content project.
  */
-final class ReleaseClassWriter {
+public final class ReleaseClassWriter {
 
     private ReleaseClassWriter() {
     }
@@ -16,14 +16,14 @@ final class ReleaseClassWriter {
     /**
      * Simple name of the generated class of a content project, e.g. {@code cygnus} becomes {@code CygnusRelease}.
      */
-    static String className(String project) {
+    public static String className(String project) {
         return JavaNames.typeName(project) + "Release";
     }
 
     /**
      * Returns the source of the final class {@code <Project>Release} in {@code packageName}.
      */
-    static String write(String packageName, Release release) {
+    public static String write(String packageName, Release release) {
         String project = release.project();
         String className = className(project);
 

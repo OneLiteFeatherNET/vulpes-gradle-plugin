@@ -29,7 +29,7 @@ configurations {
 shadow.addShadowVariantIntoJavaComponent.set(false)
 
 dependencies {
-    bundled(project(":vulpes-format"))
+    bundled(project(":vulpes-codegen"))
 
     testImplementation(testFixtures(project(":vulpes-format")))
 }

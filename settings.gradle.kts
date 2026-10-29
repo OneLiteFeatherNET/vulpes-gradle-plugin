@@ -7,7 +7,7 @@ pluginManagement {
 
 rootProject.name = "vulpes-gradle-plugin-build"
 
-include("vulpes-format", "vulpes-gradle-plugin")
+include("vulpes-format", "vulpes-codegen", "vulpes-gradle-plugin")
 
 dependencyResolutionManagement {
     repositories {

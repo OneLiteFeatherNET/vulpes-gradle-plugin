@@ -1,4 +1,4 @@
-package net.onelitefeather.vulpes.gradle;
+package net.onelitefeather.vulpes.codegen;
 
 import java.util.Locale;
 import javax.lang.model.SourceVersion;
@@ -6,7 +6,7 @@ import javax.lang.model.SourceVersion;
 /**
  * Maps Vulpes project and pack names to Java identifiers.
  */
-final class JavaNames {
+public final class JavaNames {
 
     private static final String PACK_PREFIX = "PACK_";
 
@@ -16,7 +16,7 @@ final class JavaNames {
     /**
      * Package segment of a project name, e.g. {@code my-game} becomes {@code my_game}.
      */
-    static String packageSegment(String project) {
+    public static String packageSegment(String project) {
         String segment = project.replace('-', '_');
         return SourceVersion.isKeyword(segment) ? segment + "_" : segment;
     }
@@ -24,7 +24,7 @@ final class JavaNames {
     /**
      * Type name of a project name, e.g. {@code my-game} becomes {@code MyGame}.
      */
-    static String typeName(String project) {
+    public static String typeName(String project) {
         StringBuilder name = new StringBuilder();
         for (String segment : project.split("-")) {
             if (!segment.isEmpty()) {
@@ -37,7 +37,7 @@ final class JavaNames {
     /**
      * Constant name of a pack, e.g. {@code 16x} becomes {@code PACK_16X}.
      */
-    static String constantName(String packId) {
+    public static String constantName(String packId) {
         return PACK_PREFIX + packId.replace('-', '_').toUpperCase(Locale.ROOT);
     }
 }
