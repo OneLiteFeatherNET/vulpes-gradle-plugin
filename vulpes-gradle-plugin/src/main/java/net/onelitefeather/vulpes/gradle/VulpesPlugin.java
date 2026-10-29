@@ -7,6 +7,7 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.attributes.Category;
@@ -27,6 +28,12 @@ public class VulpesPlugin implements Plugin<Project> {
     static final String DATA_CONFIGURATION = "vulpesData";
     static final String TASK_NAME = "vulpesGenerate";
     static final String GENERATED_DIRECTORY = "generated/sources/vulpes/java/main";
+    static final String BASE_SCOPE = "vulpesDiffBaseScope";
+    static final String BASE_CONFIGURATION = "vulpesDiffBase";
+    static final String DIFF_TASK_NAME = "vulpesDiff";
+    static final String DIFF_FROM_PROPERTY = "vulpes.diff.from";
+    static final String DIFF_PROJECT_PROPERTY = "vulpes.diff.project";
+    static final String REPORT_DIRECTORY = "reports/vulpes/diff";
 
     @Override
     public void apply(Project project) {
@@ -35,10 +42,29 @@ public class VulpesPlugin implements Plugin<Project> {
         Configuration vulpesData = project.getConfigurations().resolvable(DATA_CONFIGURATION, data -> {
             data.extendsFrom(vulpes);
             data.setTransitive(false);
-            data.getAttributes().attribute(Usage.USAGE_ATTRIBUTE,
-                    project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME));
-            data.getAttributes().attribute(Category.CATEGORY_ATTRIBUTE,
-                    project.getObjects().named(Category.class, Category.LIBRARY));
+            dataAttributes(project, data);
+        }).get();
+
+        Provider<String> diffFrom = project.getProviders().gradleProperty(DIFF_FROM_PROPERTY);
+        Provider<String> diffProject = project.getProviders().gradleProperty(DIFF_PROJECT_PROPERTY);
+        Configuration vulpesDiffScope = project.getConfigurations().dependencyScope(BASE_SCOPE).get();
+        vulpesDiffScope.withDependencies(dependencies -> {
+            String from = diffFrom.getOrNull();
+            String only = diffProject.getOrNull();
+            if (from == null) {
+                return;
+            }
+            for (Dependency declared : vulpes.getDependencies()) {
+                if (only == null || only.equals(declared.getName())) {
+                    dependencies.add(project.getDependencies()
+                            .create(declared.getGroup() + ":" + declared.getName() + ":" + from));
+                }
+            }
+        });
+        Configuration vulpesDiffBase = project.getConfigurations().resolvable(BASE_CONFIGURATION, base -> {
+            base.extendsFrom(vulpesDiffScope);
+            base.setTransitive(false);
+            dataAttributes(project, base);
         }).get();
 
         TaskProvider<VulpesGenerateTask> generate = project.getTasks().register(TASK_NAME, VulpesGenerateTask.class,
@@ -53,6 +79,18 @@ public class VulpesPlugin implements Plugin<Project> {
                     task.getOutputDirectory().set(project.getLayout().getBuildDirectory().dir(GENERATED_DIRECTORY));
                 });
 
+        project.getTasks().register(DIFF_TASK_NAME, VulpesDiffTask.class, task -> {
+            task.setGroup("vulpes");
+            task.setDescription("Compares the content data JARs with -Pvulpes.diff.from=<version>.");
+            task.getDataJars().from(vulpesData);
+            task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+            task.getBaseDataJars().from(vulpesDiffBase);
+            task.getBaseArtifactIdsByFileName().set(artifactIdsByFileName(vulpesDiffBase));
+            task.getBaseVersion().set(diffFrom);
+            task.getProjectFilter().set(diffProject);
+            task.getReportDirectory().set(project.getLayout().getBuildDirectory().dir(REPORT_DIRECTORY));
+        });
+
         project.getPluginManager().withPlugin("java", javaPlugin -> {
             SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
             sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME).getJava()
@@ -65,6 +103,13 @@ public class VulpesPlugin implements Plugin<Project> {
                         + "apply 'java' or 'java-library'.");
             }
         });
+    }
+
+    private static void dataAttributes(Project project, Configuration configuration) {
+        configuration.getAttributes().attribute(Usage.USAGE_ATTRIBUTE,
+                project.getObjects().named(Usage.class, Usage.JAVA_RUNTIME));
+        configuration.getAttributes().attribute(Category.CATEGORY_ATTRIBUTE,
+                project.getObjects().named(Category.class, Category.LIBRARY));
     }
 
     private static Provider<Map<String, String>> artifactIdsByFileName(Configuration vulpesData) {
