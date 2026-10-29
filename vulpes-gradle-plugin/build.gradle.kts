@@ -65,6 +65,7 @@ tasks.named<ShadowJar>("shadowJar") {
     }
     mergeServiceFiles()
     relocate("com.fasterxml.jackson", "net.onelitefeather.vulpes.gradle.internal.jackson")
+    relocate("com.palantir.javapoet", "net.onelitefeather.vulpes.gradle.internal.javapoet")
 }
 
 testing {
