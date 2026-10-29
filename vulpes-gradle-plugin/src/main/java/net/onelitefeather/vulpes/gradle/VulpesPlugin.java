@@ -9,6 +9,7 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.dsl.DependencyHandler;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.attributes.Category;
 import org.gradle.api.attributes.Usage;
@@ -38,6 +39,7 @@ public class VulpesPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
         VulpesExtension extension = project.getExtensions().create(EXTENSION_NAME, VulpesExtension.class);
+        extension.getTemplate().convention(VulpesTemplates.DEFAULT);
         Configuration vulpes = project.getConfigurations().dependencyScope(DEPENDENCY_SCOPE).get();
         Configuration vulpesData = project.getConfigurations().resolvable(DATA_CONFIGURATION, data -> {
             data.extendsFrom(vulpes);
@@ -73,6 +75,7 @@ public class VulpesPlugin implements Plugin<Project> {
                     task.setDescription("Generates Java sources from the Vulpes content data JARs.");
                     task.getDataJars().from(vulpesData);
                     task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+                    task.getTemplate().set(extension.getTemplate());
                     task.getPackageName().set(extension.getPackageName());
                     task.getPackages().set(project.provider(() -> packageOverrides(extension)));
                     task.getPluginVersion().set(pluginVersion());
@@ -95,6 +98,15 @@ public class VulpesPlugin implements Plugin<Project> {
             SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
             sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME).getJava()
                     .srcDir(generate.flatMap(VulpesGenerateTask::getOutputDirectory));
+
+            // The runtime library of the selected template, resolved lazily so that the template can be set later.
+            DependencyHandler dependencies = project.getDependencies();
+            Configuration implementation = project.getConfigurations().getByName(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME);
+            implementation.getDependencies().addAllLater(extension.getTemplate().map(name -> VulpesTemplates.select(name)
+                    .runtimeDependencies().stream()
+                    .map(dependency -> dependencies.create(dependency.group() + ":" + dependency.name() + ":"
+                            + dependency.version()))
+                    .toList()));
         });
 
         project.afterEvaluate(evaluated -> {

@@ -11,7 +11,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-import net.onelitefeather.vulpes.codegen.ReleaseClassWriter;
+import net.onelitefeather.vulpes.codegen.CodegenException;
+import net.onelitefeather.vulpes.codegen.GeneratedSource;
+import net.onelitefeather.vulpes.codegen.Template;
+import net.onelitefeather.vulpes.codegen.Templates;
 import net.onelitefeather.vulpes.format.ContentFormatException;
 import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
@@ -29,7 +32,7 @@ import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
 /**
- * Writes the release constants of every Vulpes data JAR as Java sources.
+ * Writes the Java sources of every Vulpes data JAR with the selected template.
  */
 @CacheableTask
 public abstract class VulpesGenerateTask extends DefaultTask {
@@ -51,6 +54,10 @@ public abstract class VulpesGenerateTask extends DefaultTask {
     @Input
     public abstract MapProperty<String, String> getPackages();
 
+    /** The template that generates the sources, by name. */
+    @Input
+    public abstract Property<String> getTemplate();
+
     /** Version of the plugin, so that a new plugin regenerates the sources. */
     @Input
     public abstract Property<String> getPluginVersion();
@@ -64,6 +71,7 @@ public abstract class VulpesGenerateTask extends DefaultTask {
         Path output = getOutputDirectory().get().getAsFile().toPath();
         clear(output);
 
+        Template template = VulpesTemplates.select(getTemplate().get());
         List<ContentRelease> releases = readReleases();
         List<String> projects = new ArrayList<>();
         releases.forEach(content -> projects.add(content.release().project()));
@@ -76,9 +84,16 @@ public abstract class VulpesGenerateTask extends DefaultTask {
 
         for (ContentRelease content : releases) {
             String project = content.release().project();
-            String source = ReleaseClassWriter.write(packages.get(project), content.release());
-            write(output.resolve(packages.get(project).replace('.', '/')),
-                    ReleaseClassWriter.className(project) + ".java", source);
+            List<GeneratedSource> sources;
+            try {
+                sources = Templates.generate(template, content, packages.get(project));
+            } catch (CodegenException e) {
+                throw new GradleException(e.getMessage(), e);
+            }
+            for (GeneratedSource source : sources) {
+                write(output.resolve(source.packageName().replace('.', '/')), source.className() + ".java",
+                        source.source());
+            }
         }
     }
 

@@ -28,13 +28,13 @@ public final class ReleaseClassWriter {
         String className = className(project);
 
         List<String> members = new ArrayList<>();
-        members.add("public static final String PROJECT = " + literal(project) + ";");
-        members.add("public static final String VERSION = " + literal(release.version()) + ";");
-        members.add("public static final String REVISION = " + literal(release.revision()) + ";");
+        members.add("public static final String PROJECT = " + JavaLiterals.string(project) + ";");
+        members.add("public static final String VERSION = " + JavaLiterals.string(release.version()) + ";");
+        members.add("public static final String REVISION = " + JavaLiterals.string(release.revision()) + ";");
         for (Pack pack : release.packs()) {
             members.add("public static final Pack " + JavaNames.constantName(pack.id()) + " = new Pack("
-                    + literal(pack.id()) + ", " + pack.resolution() + ", " + literal(pack.url()) + ", "
-                    + literal(pack.sha1()) + ", " + pack.size() + "L);");
+                    + JavaLiterals.string(pack.id()) + ", " + pack.resolution() + ", " + JavaLiterals.string(pack.url()) + ", "
+                    + JavaLiterals.string(pack.sha1()) + ", " + pack.size() + "L);");
         }
         members.add("public static final List<Pack> PACKS = " + packsExpression(release.packs()) + ";");
 
@@ -69,32 +69,5 @@ public final class ReleaseClassWriter {
             names.add(JavaNames.constantName(pack.id()));
         }
         return "List.of(" + String.join(", ", names) + ")";
-    }
-
-    /**
-     * A Java string literal. Line breaks and tabs use their named escapes, since a unicode escape of a line
-     * terminator would end the literal.
-     */
-    private static String literal(String value) {
-        StringBuilder literal = new StringBuilder("\"");
-        for (char c : value.toCharArray()) {
-            switch (c) {
-                case '"' -> literal.append("\\\"");
-                case '\\' -> literal.append("\\\\");
-                case '\b' -> literal.append("\\b");
-                case '\t' -> literal.append("\\t");
-                case '\n' -> literal.append("\\n");
-                case '\f' -> literal.append("\\f");
-                case '\r' -> literal.append("\\r");
-                default -> {
-                    if (c < 0x20 || c > 0x7e) {
-                        literal.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        literal.append(c);
-                    }
-                }
-            }
-        }
-        return literal.append('"').toString();
     }
 }

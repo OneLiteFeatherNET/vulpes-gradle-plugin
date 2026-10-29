@@ -25,6 +25,11 @@ public abstract class VulpesExtension {
     public abstract Property<String> getPackageName();
 
     /**
+     * The template that generates the code: {@code minestom} (default) or {@code keys}.
+     */
+    public abstract Property<String> getTemplate();
+
+    /**
      * Settings of the content projects, by project name.
      */
     public NamedDomainObjectContainer<VulpesProjectSettings> getProjects() {

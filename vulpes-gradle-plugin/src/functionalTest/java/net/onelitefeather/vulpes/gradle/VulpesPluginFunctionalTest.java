@@ -2,6 +2,7 @@ package net.onelitefeather.vulpes.gradle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,11 +10,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import net.kyori.adventure.key.Key;
 import net.onelitefeather.vulpes.format.fixtures.DataJarFixtures;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.BuildTask;
@@ -34,12 +37,17 @@ final class VulpesPluginFunctionalTest {
     private static final String CYGNUS_DIFF_MARKDOWN = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.md";
     private static final String CYGNUS_DIFF_JSON = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.json";
     private static final String FROM_1_4_0 = "-Pvulpes.diff.from=1.4.0";
+    private static final String CYGNUS_CONTENT = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusContent.java";
+    private static final String CYGNUS_ITEM_KEYS = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusItemKeys.java";
+    private static final String DEPENDENCY = "dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }";
+    /** The compile tests generate the keys only, so that they need adventure-key and not vulpes-base. */
+    private static final String KEYS_TEMPLATE = "vulpes { template = \"keys\" }";
 
     @Test
     void generatesReleaseClassSourceForDataJar(@TempDir Path dir) throws IOException {
         Workspace workspace = new Workspace(dir);
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
-        workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }");
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
 
         workspace.runner("compileJava").build();
 
@@ -51,7 +59,7 @@ final class VulpesPluginFunctionalTest {
     void compilesGeneratedReleaseClass(@TempDir Path dir) throws IOException {
         Workspace workspace = new Workspace(dir);
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
-        workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }");
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
 
         BuildResult result = workspace.runner("compileJava").build();
 
@@ -63,7 +71,7 @@ final class VulpesPluginFunctionalTest {
     void runsGenerationBeforeCompilation(@TempDir Path dir) throws IOException {
         Workspace workspace = new Workspace(dir);
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
-        workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }");
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
 
         BuildResult result = workspace.runner("compileJava").build();
 
@@ -375,6 +383,80 @@ final class VulpesPluginFunctionalTest {
         });
     }
 
+    @Test
+    void defaultTemplateGeneratesContentClass(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY);
+
+        workspace.runner("vulpesGenerate").build();
+
+        assertTrue(Files.isRegularFile(workspace.file(CYGNUS_CONTENT)), "CygnusContent of the minestom template");
+    }
+
+    @Test
+    void keysTemplateOmitsContentClass(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        workspace.runner("vulpesGenerate").build();
+
+        assertFalse(Files.exists(workspace.file(CYGNUS_CONTENT)), "the keys template generates no CygnusContent");
+        assertTrue(Files.isRegularFile(workspace.file(CYGNUS_ITEM_KEYS)), "the keys template generates the key classes");
+    }
+
+    @Test
+    void unknownTemplateFailsNamingKnownTemplates(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY + "\nvulpes { template = \"paper\" }");
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("keys, minestom"),
+                "message must list the known templates:\n" + result.getOutput());
+    }
+
+    @Test
+    void changingTemplateRegeneratesWithoutContentClass(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY);
+        workspace.runner("vulpesGenerate").build();
+        assertTrue(Files.isRegularFile(workspace.file(CYGNUS_CONTENT)), "precondition: minestom generated CygnusContent");
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertNotEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "a changed template must rerun");
+        assertFalse(Files.exists(workspace.file(CYGNUS_CONTENT)), "the keys output must not keep CygnusContent");
+    }
+
+    @Test
+    void minestomTemplateAddsVulpesBaseToImplementation(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("dependencies", "--configuration", "implementation").build();
+
+        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes:vulpes-base:0.0.0"),
+                "implementation must name vulpes-base in the version of the plugin:\n" + result.getOutput());
+    }
+
+    @Test
+    void keysTemplateAddsAdventureKeyToImplementation(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("dependencies", "--configuration", "implementation").build();
+
+        assertTrue(result.getOutput().contains("net.kyori:adventure-key:5.2.0"),
+                "implementation must name adventure-key in the version of the plugin:\n" + result.getOutput());
+    }
+
     private static TaskOutcome outcome(BuildResult result, String path) {
         BuildTask task = result.task(path);
         assertNotNull(task, path + " must have run: " + tasks(result));
@@ -409,6 +491,7 @@ final class VulpesPluginFunctionalTest {
             this.project = Files.createDirectories(root.resolve("project"));
             this.repository = Files.createDirectories(root.resolve("repository"));
             this.buildCache = root.resolve("build-cache");
+            publishAdventureKey(this.repository);
             Files.writeString(project.resolve("settings.gradle.kts"), """
                     rootProject.name = "game"
 
@@ -426,6 +509,29 @@ final class VulpesPluginFunctionalTest {
 
         void publish(String artifactId, String version, byte[] releaseJson, byte[] snapshotJson) {
             DataJarFixtures.writeMavenModule(repository, artifactId, version, releaseJson, snapshotJson);
+        }
+
+        /**
+         * Copies the adventure-key jar of this test JVM into the repository, so that the keys template resolves offline.
+         */
+        private static void publishAdventureKey(Path repository) {
+            try {
+                Path jar = Path.of(Key.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+                Path module = Files.createDirectories(repository.resolve("net/kyori/adventure-key/5.2.0"));
+                Files.copy(jar, module.resolve("adventure-key-5.2.0.jar"));
+                Files.writeString(module.resolve("adventure-key-5.2.0.pom"), """
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <project xmlns="http://maven.apache.org/POM/4.0.0">
+                            <modelVersion>4.0.0</modelVersion>
+                            <groupId>net.kyori</groupId>
+                            <artifactId>adventure-key</artifactId>
+                            <version>5.2.0</version>
+                            <packaging>jar</packaging>
+                        </project>
+                        """, StandardCharsets.UTF_8);
+            } catch (IOException | URISyntaxException e) {
+                throw new IllegalStateException("cannot publish adventure-key to the test repository", e);
+            }
         }
 
         String repositoryUri() {
