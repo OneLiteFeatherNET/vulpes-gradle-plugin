@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onelitefeather.net/schemas/vulpes/release-1.json",
+  "title": "Vulpes release descriptor (META-INF/vulpes/release.json), format 1",
+  "description": "Describes one immutable content release. Serialized as UTF-8 with sorted object keys and no insignificant whitespace. packs[].id is unique.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "project",
+    "projectId",
+    "version",
+    "revision",
+    "packs",
+    "provenance"
+  ],
+  "properties": {
+    "format": {
+      "description": "Format version of release.json. Consumers reject unknown values.",
+      "const": 1
+    },
+    "project": {
+      "description": "Project name, equal to the Maven artifactId under net.onelitefeather.vulpes.content.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "projectId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "description": "SemVer release version; preview builds use <next>-dev.<n>.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-dev\\.(0|[1-9][0-9]*))?$"
+    },
+    "revision": {
+      "description": "sha256 over the exact bytes of META-INF/vulpes/snapshot.json.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "packs": {
+      "description": "Resource packs of this release, sorted by id. Empty while packs are not built yet.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pack"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "createdBy",
+        "createdAt"
+      ],
+      "properties": {
+        "generator": {
+          "description": "Version of vulpes-generator that built the release.",
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "description": "Time the release was frozen in the backend (UTC), not the generator's clock.",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "resolution",
+        "url",
+        "sha1",
+        "size"
+      ],
+      "properties": {
+        "id": {
+          "description": "Stable variant id, unique within packs; becomes a constant name such as PACK_16X.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "resolution": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha1": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "size": {
+          "description": "Pack size in bytes.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
