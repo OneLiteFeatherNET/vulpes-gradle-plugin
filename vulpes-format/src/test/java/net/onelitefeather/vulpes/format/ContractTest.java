@@ -5,8 +5,10 @@ import static net.onelitefeather.vulpes.format.TestFixtures.bytes;
 import static net.onelitefeather.vulpes.format.TestFixtures.sha256Hex;
 import static net.onelitefeather.vulpes.format.TestFixtures.tree;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.networknt.schema.InputFormat;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
@@ -30,6 +32,19 @@ final class ContractTest {
     @Test
     void releaseFixtureMatchesReleaseSchema() {
         assertFixtureMatchesSchema("release-1.schema.json", RELEASE_FIXTURE);
+    }
+
+    @Test
+    void releaseSnapshotVersionMatchesReleaseSchema() {
+        assertEquals(List.of(), releaseViolations("1.5.0-SNAPSHOT"),
+                "a -SNAPSHOT version must validate against release-1.schema.json");
+    }
+
+    @Test
+    void releasePreviewVersionIsRejected() {
+        List<String> violations = releaseViolations("1.5.0-dev.3");
+        assertEquals(1, violations.size(), "a -dev.N version must be rejected once: " + violations);
+        assertTrue(violations.get(0).startsWith("/version"), "the violation must point at the version: " + violations);
     }
 
     @Test
@@ -107,12 +122,22 @@ final class ContractTest {
     }
 
     private static void assertFixtureMatchesSchema(String schemaName, String fixture) {
+        assertEquals(List.of(), violations(schemaName, new String(bytes(fixture), UTF_8)),
+                fixture + " must validate against " + schemaName);
+    }
+
+    private static List<String> releaseViolations(String version) {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("version", version);
+        return violations("release-1.schema.json", release.toString());
+    }
+
+    private static List<String> violations(String schemaName, String json) {
         Schema schema = SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
                 .getSchema(new ByteArrayInputStream(bytes(SCHEMA_DIR + schemaName)), InputFormat.JSON);
-        List<String> violations = schema.validate(new String(bytes(fixture), UTF_8), InputFormat.JSON).stream()
+        return schema.validate(json, InputFormat.JSON).stream()
                 .map(error -> error.getInstanceLocation() + ": " + error.getMessage())
                 .toList();
-        assertEquals(List.of(), violations, fixture + " must validate against " + schemaName);
     }
 
     private static void assertSortedBy(String list, String field) {
