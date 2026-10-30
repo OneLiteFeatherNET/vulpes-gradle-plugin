@@ -1,4 +1,4 @@
-package net.onelitefeather.vulpes.gradle;
+package net.onelitefeather.vulpes.codegen;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

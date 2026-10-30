@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.language.jvm.tasks.ProcessResources
 
 plugins {
     `java-gradle-plugin`
@@ -29,7 +30,7 @@ configurations {
 shadow.addShadowVariantIntoJavaComponent.set(false)
 
 dependencies {
-    bundled(project(":vulpes-format"))
+    bundled(project(":vulpes-codegen"))
 
     testImplementation(testFixtures(project(":vulpes-format")))
 }
@@ -37,6 +38,19 @@ dependencies {
 tasks.withType<Jar>().configureEach {
     manifest {
         attributes("Implementation-Version" to project.version)
+    }
+}
+
+// Library versions the plugin was built and tested with, read at runtime to pick the runtime dependencies of a template.
+val versionsFile = tasks.register<WriteProperties>("writeVersions") {
+    destinationFile = layout.buildDirectory.file("generated/vulpes/versions.properties")
+    property("vulpes-base", libs.versions.vulpes.base.get())
+    property("adventure-key", libs.versions.adventure.key.get())
+}
+
+tasks.named<ProcessResources>("processResources") {
+    from(versionsFile) {
+        into("net/onelitefeather/vulpes/gradle")
     }
 }
 
@@ -51,6 +65,7 @@ tasks.named<ShadowJar>("shadowJar") {
     }
     mergeServiceFiles()
     relocate("com.fasterxml.jackson", "net.onelitefeather.vulpes.gradle.internal.jackson")
+    relocate("com.palantir.javapoet", "net.onelitefeather.vulpes.gradle.internal.javapoet")
 }
 
 testing {
@@ -59,6 +74,7 @@ testing {
             useJUnitJupiter(libs.versions.junit.get())
             dependencies {
                 implementation(testFixtures(project(":vulpes-format")))
+                implementation(libs.adventure.key)
                 implementation(platform(libs.jackson.bom))
                 implementation(libs.jackson.databind)
                 implementation(gradleTestKit())
@@ -69,6 +85,11 @@ testing {
 
 tasks.named("check") {
     dependsOn(testing.suites.named("functionalTest"))
+}
+
+// adventure-key is built for Java 21; the TestKit tests put a copy of it into their repositories.
+tasks.named<JavaCompile>("compileFunctionalTestJava") {
+    options.release = 21
 }
 
 gradlePlugin {
