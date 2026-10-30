@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.1.0...v0.2.0) (2026-10-30)
+
+
+### Features
+
+* **codegen:** generate typed access to content expressions ([#12](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/12)) ([e39b0e1](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/e39b0e14e50c8f32d099e26c64e5552e2354eb4d))
+* **format:** accept snapshot versions in release.json ([#9](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/9)) ([d2e9139](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/d2e91395613c7a097c1f8837063d32edd2d947f3))
+
 ## 0.1.0 (2026-10-30)
 
 
