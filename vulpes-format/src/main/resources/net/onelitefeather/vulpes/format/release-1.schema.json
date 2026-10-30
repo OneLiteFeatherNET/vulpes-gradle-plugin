@@ -29,9 +29,9 @@
       "format": "uuid"
     },
     "version": {
-      "description": "SemVer release version; preview builds use <next>-dev.<n>.",
+      "description": "Maven version of the data JAR: X.Y.Z for a release, X.Y.Z-SNAPSHOT for a snapshot.",
       "type": "string",
-      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-dev\\.(0|[1-9][0-9]*))?$"
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-SNAPSHOT)?$"
     },
     "revision": {
       "description": "sha256 over the exact bytes of META-INF/vulpes/snapshot.json.",
