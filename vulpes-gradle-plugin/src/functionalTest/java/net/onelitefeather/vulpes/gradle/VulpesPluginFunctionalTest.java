@@ -441,7 +441,7 @@ final class VulpesPluginFunctionalTest {
 
         BuildResult result = workspace.runner("dependencies", "--configuration", "implementation").build();
 
-        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes:vulpes-base:0.5.0"),
+        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes:vulpes-base:0.6.0"),
                 "implementation must name vulpes-base in the version of the plugin:\n" + result.getOutput());
     }
 

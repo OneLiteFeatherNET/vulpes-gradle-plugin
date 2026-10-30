@@ -5,6 +5,7 @@ import static net.onelitefeather.vulpes.format.diff.DiffFixtures.OLD_SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.STEEL_SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.content;
+import static net.onelitefeather.vulpes.format.diff.DiffFixtures.maxHealth;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.item;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,6 +17,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import net.onelitefeather.vulpes.format.ExpressionParameter;
+import net.onelitefeather.vulpes.format.ExpressionType;
 import org.junit.jupiter.api.Test;
 
 final class DiffReportTest {
@@ -47,10 +50,22 @@ final class DiffReportTest {
     }
 
     @Test
+    void markdownListsChangedExpressionInExpressionsSection() {
+        List<ExpressionParameter> level = List.of(new ExpressionParameter("level", ExpressionType.NUMBER));
+        String markdown = ContentDiff.compare(
+                content("1.4.0", snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(level, ExpressionType.NUMBER, "20 + level")))),
+                content("1.5.0", snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(level, ExpressionType.NUMBER, "30 + level")))))
+                .toMarkdown();
+
+        assertTrue(markdown.contains("## Expressions\n"), "markdown must have an expressions section:\n" + markdown);
+        assertTrue(markdown.contains("- `maxHealth`: expression"), "markdown must list the changed source:\n" + markdown);
+    }
+
+    @Test
     void jsonHasSortedObjectKeys() throws IOException {
         JsonNode json = new ObjectMapper().readTree(renamedReport().toJson());
 
-        assertEquals(List.of("advancements", "attributes", "expressionFunctions", "fonts", "fromVersion", "items",
+        assertEquals(List.of("advancements", "attributes", "expressionFunctions", "expressions", "fonts", "fromVersion", "items",
                         "packs", "project", "requiredBump", "sounds", "toVersion"), names(json.fieldNames()),
                 "root keys of the report");
         assertEquals(List.of("added", "changed", "removed", "renamed"), names(json.get("items").fieldNames()),

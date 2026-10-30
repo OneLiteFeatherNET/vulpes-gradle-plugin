@@ -4,6 +4,7 @@ import static net.onelitefeather.vulpes.format.diff.DiffFixtures.CRIT;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.IN_ARENA;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.IRON_SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.OLD_SWORD;
+import static net.onelitefeather.vulpes.format.diff.DiffFixtures.MAX_HEALTH;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.STEEL_SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.SWORD;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.armorDamage;
@@ -11,6 +12,7 @@ import static net.onelitefeather.vulpes.format.diff.DiffFixtures.attribute;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.content;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.inArena;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.item;
+import static net.onelitefeather.vulpes.format.diff.DiffFixtures.maxHealth;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.pack;
 import static net.onelitefeather.vulpes.format.diff.DiffFixtures.snapshot;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.List;
 import java.util.Map;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.Expression;
 import net.onelitefeather.vulpes.format.ExpressionFunction;
 import net.onelitefeather.vulpes.format.ExpressionParameter;
 import net.onelitefeather.vulpes.format.ExpressionType;
@@ -29,6 +32,116 @@ import net.onelitefeather.vulpes.format.Snapshot;
 import org.junit.jupiter.api.Test;
 
 final class ContentDiffTest {
+
+    private static final List<ExpressionParameter> LEVEL = List.of(new ExpressionParameter("level", ExpressionType.NUMBER));
+
+    @Test
+    void reportsAddedExpressionByName() {
+        DiffReport report = compare(snapshot(List.of(), List.of(), List.of()),
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))));
+
+        assertEquals(List.of("maxHealth"), report.expressions().added(), "added expressions");
+        assertEquals(List.of(), report.expressions().removed(), "removed expressions");
+    }
+
+    @Test
+    void reportsRemovedExpressionByName() {
+        DiffReport report = compare(
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))),
+                snapshot(List.of(), List.of(), List.of()));
+
+        assertEquals(List.of("maxHealth"), report.expressions().removed(), "removed expressions");
+    }
+
+    @Test
+    void reportsRenamedExpressionWithPreviousNameAsAliased() {
+        Expression before = new Expression(MAX_HEALTH, List.of(), "oldHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+        Expression after = new Expression(MAX_HEALTH, List.of("oldHealth"), "maxHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+
+        DiffReport report = compare(snapshot(List.of(), List.of(), List.of(), List.of(before)),
+                snapshot(List.of(), List.of(), List.of(), List.of(after)));
+
+        assertEquals(List.of(new Rename("oldHealth", "maxHealth", true)), report.expressions().renamed(),
+                "renamed expression keeps the old name in previousNames");
+    }
+
+    @Test
+    void addedExpressionRequiresMinor() {
+        DiffReport report = compare(snapshot(List.of(), List.of(), List.of()),
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))));
+
+        assertEquals(VersionBump.MINOR, report.requiredBump(), "bump for an added expression");
+    }
+
+    @Test
+    void removedExpressionRequiresMajor() {
+        DiffReport report = compare(
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))),
+                snapshot(List.of(), List.of(), List.of()));
+
+        assertEquals(VersionBump.MAJOR, report.requiredBump(), "bump for a removed expression");
+    }
+
+    @Test
+    void renameOfExpressionWithPreviousNameRequiresMinor() {
+        Expression before = new Expression(MAX_HEALTH, List.of(), "oldHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+        Expression after = new Expression(MAX_HEALTH, List.of("oldHealth"), "maxHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+
+        DiffReport report = compare(snapshot(List.of(), List.of(), List.of(), List.of(before)),
+                snapshot(List.of(), List.of(), List.of(), List.of(after)));
+
+        assertEquals(VersionBump.MINOR, report.requiredBump(), "bump for a rename that keeps the old name");
+    }
+
+    @Test
+    void renameOfExpressionWithoutPreviousNameRequiresMajor() {
+        Expression before = new Expression(MAX_HEALTH, List.of(), "oldHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+        Expression after = new Expression(MAX_HEALTH, List.of(), "maxHealth", "Lebenspunkte", LEVEL,
+                ExpressionType.NUMBER, "20 + level");
+
+        DiffReport report = compare(snapshot(List.of(), List.of(), List.of(), List.of(before)),
+                snapshot(List.of(), List.of(), List.of(), List.of(after)));
+
+        assertEquals(VersionBump.MAJOR, report.requiredBump(), "bump for a rename without the old name");
+    }
+
+    @Test
+    void changedExpressionVariablesAreSignatureChangeRequiringMajor() {
+        DiffReport report = compare(
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))),
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(List.of(), ExpressionType.NUMBER, "20 + level"))));
+
+        assertEquals(List.of(new Change("maxHealth", List.of("variables"), true)), report.expressions().changed(),
+                "changed variables are a signature change");
+        assertEquals(VersionBump.MAJOR, report.requiredBump(), "bump for changed variables");
+    }
+
+    @Test
+    void changedExpressionReturnTypeIsSignatureChangeRequiringMajor() {
+        DiffReport report = compare(
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))),
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.STRING, "20 + level"))));
+
+        assertEquals(List.of(new Change("maxHealth", List.of("returnType"), true)), report.expressions().changed(),
+                "changed return type is a signature change");
+        assertEquals(VersionBump.MAJOR, report.requiredBump(), "bump for a changed return type");
+    }
+
+    @Test
+    void changedExpressionSourceRequiresPatchOnly() {
+        DiffReport report = compare(
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "20 + level"))),
+                snapshot(List.of(), List.of(), List.of(), List.of(maxHealth(LEVEL, ExpressionType.NUMBER, "30 + level"))));
+
+        assertEquals(List.of(new Change("maxHealth", List.of("expression"), false)), report.expressions().changed(),
+                "a changed source is not a signature change");
+        assertEquals(VersionBump.PATCH, report.requiredBump(), "bump for a changed source");
+    }
 
     @Test
     void reportsAddedItemByKey() {

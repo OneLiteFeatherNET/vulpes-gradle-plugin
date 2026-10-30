@@ -14,6 +14,7 @@ import java.util.function.Predicate;
 import net.onelitefeather.vulpes.format.Advancement;
 import net.onelitefeather.vulpes.format.Attribute;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.Expression;
 import net.onelitefeather.vulpes.format.ExpressionFunction;
 import net.onelitefeather.vulpes.format.ExpressionFunctionKind;
 import net.onelitefeather.vulpes.format.FontSymbol;
@@ -60,6 +61,11 @@ public final class ContentDiff {
                     "expression", function.expression()),
             Set.of("kind", "parameters", "returnType"),
             function -> function.kind() == ExpressionFunctionKind.INTERFACE);
+    private static final Rules<Expression> EXPRESSIONS = new Rules<>(Expression::id, Expression::name,
+            Expression::previousNames,
+            expression -> fieldsOf("description", expression.description(), "variables", expression.variables(),
+                    "returnType", expression.returnType(), "expression", expression.expression()),
+            Set.of("variables", "returnType"), expression -> true);
 
     private ContentDiff() {
     }
@@ -87,14 +93,16 @@ public final class ContentDiff {
         Compared<EntityDiff> advancements = compareEntities(before.advancements(), after.advancements(), ADVANCEMENTS);
         Compared<EntityDiff> functions = compareEntities(before.expressionFunctions(), after.expressionFunctions(),
                 FUNCTIONS);
+        Compared<EntityDiff> expressions = compareEntities(before.expressions(), after.expressions(), EXPRESSIONS);
         Compared<PackDiff> packs = comparePacks(from.release().packs(), to.release().packs());
 
-        VersionBump requiredBump = List.of(items, attributes, fonts, sounds, advancements, functions, packs).stream()
+        VersionBump requiredBump = List.of(items, attributes, fonts, sounds, advancements, functions, expressions,
+                        packs).stream()
                 .map(Compared::bump)
                 .reduce(VersionBump.NONE, ContentDiff::higher);
         return new DiffReport(project, from.release().version(), to.release().version(), requiredBump,
                 items.diff(), attributes.diff(), fonts.diff(), sounds.diff(), advancements.diff(), functions.diff(),
-                packs.diff());
+                expressions.diff(), packs.diff());
     }
 
     private static <T> Compared<EntityDiff> compareEntities(List<T> before, List<T> after, Rules<T> rules) {

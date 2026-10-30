@@ -13,7 +13,7 @@ public final class CygnusRelease {
 
     public static final String VERSION = "1.4.0";
 
-    public static final String REVISION = "sha256:046d3f84a66ba0940f6686d2679df8ac03d02c0350e0312e79feac5c9318b0b4";
+    public static final String REVISION = "sha256:a79f668ed6c27316205f5638b5bfcfc887ec0c28a6fbaac50908771fa5518a51";
 
     public static final Pack PACK_16X = new Pack("16x", 16, "https://cdn.onelitefeather.net/packs/cygnus/3b1e5c0d9a8f7e6d5c4b3a291807f6e5d4c3b2a1.zip", "3b1e5c0d9a8f7e6d5c4b3a291807f6e5d4c3b2a1", 123456L);
 

@@ -63,6 +63,22 @@ final class TemplatesTest {
     }
 
     @Test
+    void minestomGeneratesFormulasForExpressions() {
+        List<String> names = Templates.generate(Templates.minestom(VULPES_BASE), TestContents.fixture(),
+                TestContents.PACKAGE).stream().map(GeneratedSource::className).toList();
+
+        assertTrue(names.contains("CygnusFormulas"), "minestom generates the formulas of the fixture: " + names);
+    }
+
+    @Test
+    void keysDoesNotGenerateFormulasEvenWithExpressions() {
+        List<String> names = Templates.generate(Templates.keys(ADVENTURE_KEY), TestContents.fixture(),
+                TestContents.PACKAGE).stream().map(GeneratedSource::className).toList();
+
+        assertFalse(names.contains("CygnusFormulas"), "keys does not evaluate expressions: " + names);
+    }
+
+    @Test
     void unsupportedEntityTypeFailsNamingTemplateAndType() {
         CodegenException exception = assertThrows(CodegenException.class,
                 () -> Templates.generate(itemsOnly(), TestContents.fixture(), TestContents.PACKAGE),

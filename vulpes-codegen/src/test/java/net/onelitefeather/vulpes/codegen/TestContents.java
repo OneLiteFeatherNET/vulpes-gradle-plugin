@@ -12,6 +12,7 @@ import net.onelitefeather.vulpes.format.AdvancementFrame;
 import net.onelitefeather.vulpes.format.Attribute;
 import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.Expression;
 import net.onelitefeather.vulpes.format.ExpressionFunction;
 import net.onelitefeather.vulpes.format.ExpressionFunctionKind;
 import net.onelitefeather.vulpes.format.ExpressionParameter;
@@ -80,6 +81,17 @@ final class TestContents {
         return new ExpressionFunction(id(name), List.of(), name, kind, null, List.of(parameters), returnType, null);
     }
 
+    static ExpressionFunction formula(String name, ExpressionType returnType, String source,
+                                      ExpressionParameter... parameters) {
+        return new ExpressionFunction(id(name), List.of(), name, ExpressionFunctionKind.FORMULA, null, List.of(parameters),
+                returnType, source);
+    }
+
+    static Expression expression(String name, ExpressionType returnType, String source,
+                                 ExpressionParameter... variables) {
+        return new Expression(id(name), List.of(), name, null, List.of(variables), returnType, source);
+    }
+
     static ExpressionParameter parameter(String name, ExpressionType type) {
         return new ExpressionParameter(name, type);
     }
@@ -117,6 +129,7 @@ final class TestContents {
         private final List<SoundEvent> sounds = new ArrayList<>();
         private final List<Advancement> advancements = new ArrayList<>();
         private final List<ExpressionFunction> functions = new ArrayList<>();
+        private final List<Expression> expressions = new ArrayList<>();
 
         Builder item(Item item) {
             items.add(item);
@@ -148,9 +161,14 @@ final class TestContents {
             return this;
         }
 
+        Builder expression(Expression expression) {
+            expressions.add(expression);
+            return this;
+        }
+
         Snapshot build() {
             return new Snapshot(1, PROJECT_ID, NAMESPACE, items, attributes, fonts, sounds, advancements, functions,
-                    List.of(), new PackSettings(List.of(16, 32), "{\"text\":\"Cygnus\"}"));
+                    expressions, List.of(), new PackSettings(List.of(16, 32), "{\"text\":\"Cygnus\"}"));
         }
     }
 }

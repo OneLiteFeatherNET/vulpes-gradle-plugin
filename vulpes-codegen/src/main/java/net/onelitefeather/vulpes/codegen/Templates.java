@@ -83,7 +83,7 @@ public final class Templates {
 
     /**
      * A template that writes the release class, the key classes and the interface of the expression functions, and
-     * for {@code minestom} also the entry classes, the content object and the resource packs.
+     * for {@code minestom} also the entry classes, the content object, the resource packs and the formulas.
      */
     private static final class ContentTemplate implements Template {
 
@@ -139,6 +139,7 @@ public final class Templates {
                 sources.add(AdvancementGenerator.generate(context, snapshot.advancements()));
                 sources.add(ContentGenerator.generate(context, snapshot));
                 sources.add(ResourcePackGenerator.generate(context, release.packs()));
+                FormulaGenerator.generate(context, snapshot).ifPresent(sources::add);
             }
             ExpressionFunctionGenerator.generate(context, snapshot.expressionFunctions()).ifPresent(sources::add);
             return List.copyOf(sources);

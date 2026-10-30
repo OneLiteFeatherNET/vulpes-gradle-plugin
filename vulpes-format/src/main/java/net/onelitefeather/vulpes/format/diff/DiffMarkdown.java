@@ -25,6 +25,7 @@ final class DiffMarkdown {
         entitySection(out, "Sound events", report.sounds());
         entitySection(out, "Advancements", report.advancements());
         entitySection(out, "Expression functions", report.expressionFunctions());
+        entitySection(out, "Expressions", report.expressions());
         if (report.packs().hasChanges()) {
             out.append("\n## Packs\n");
             keyList(out, "Added", report.packs().added());

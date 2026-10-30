@@ -11,8 +11,10 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -76,6 +78,7 @@ public final class ContentReader {
         ObjectNode snapshotNode = parse(source, SNAPSHOT_FILE, snapshotJson);
         checkFormat(source, SNAPSHOT_FILE, snapshotNode);
         Snapshot snapshot = map(source, SNAPSHOT_FILE, snapshotNode, ContentReader::snapshot);
+        checkExpressionNames(source, snapshot);
         return new ContentRelease(release, snapshot);
     }
 
@@ -143,10 +146,11 @@ public final class ContentReader {
         List<SoundEvent> sounds = o.objectList("sounds", ContentReader::soundEvent);
         List<Advancement> advancements = o.objectList("advancements", ContentReader::advancement);
         List<ExpressionFunction> functions = o.objectList("expressionFunctions", ContentReader::expressionFunction);
+        List<Expression> expressions = o.objectList("expressions", ContentReader::expression);
         List<Asset> assets = o.objectList("assets", ContentReader::asset);
         PackSettings pack = o.object("pack", ContentReader::packSettings);
         return new Snapshot(format, projectId, namespace, items, attributes, fonts, sounds, advancements, functions,
-                assets, pack);
+                expressions, assets, pack);
     }
 
     private static Item item(JsonObject o) {
@@ -190,6 +194,12 @@ public final class ContentReader {
                 o.enumValue("returnType", ExpressionType.class), o.nullableString("expression"));
     }
 
+    private static Expression expression(JsonObject o) {
+        return new Expression(o.uuid("id"), o.stringList("previousNames"), o.string("name"),
+                o.nullableString("description"), o.objectList("variables", ContentReader::expressionParameter),
+                o.enumValue("returnType", ExpressionType.class), o.string("expression"));
+    }
+
     private static ExpressionParameter expressionParameter(JsonObject o) {
         return new ExpressionParameter(o.string("name"), o.enumValue("type", ExpressionType.class));
     }
@@ -201,6 +211,24 @@ public final class ContentReader {
 
     private static PackSettings packSettings(JsonObject o) {
         return new PackSettings(o.intList("resolutions"), o.rawJson("description"));
+    }
+
+    /**
+     * A name is the identifier of an expression or an expression function, so the two lists must not share one.
+     */
+    private static void checkExpressionNames(String source, Snapshot snapshot) {
+        Map<String, Integer> functionIndexByName = new HashMap<>();
+        for (int j = 0; j < snapshot.expressionFunctions().size(); j++) {
+            functionIndexByName.putIfAbsent(snapshot.expressionFunctions().get(j).name(), j);
+        }
+        for (int i = 0; i < snapshot.expressions().size(); i++) {
+            String name = snapshot.expressions().get(i).name();
+            Integer j = functionIndexByName.get(name);
+            if (j != null) {
+                throw new ContentFormatException(source + ": " + SNAPSHOT_FILE + ": $.expressions[" + i
+                        + "].name: name '" + name + "' is also used by $.expressionFunctions[" + j + "].name");
+            }
+        }
     }
 
     private static String sha256Hex(byte[] bytes) {

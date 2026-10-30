@@ -56,19 +56,22 @@ final class ExpressionFunctionGenerator {
         MethodSpec.Builder method = MethodSpec.methodBuilder(methodName(function.name()))
                 .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
                 .returns(javaType(function.returnType()));
-        method.addJavadoc("$L", javadoc(function));
+        method.addJavadoc("$L", javadoc(function.description(), function.name()));
         for (var parameter : function.parameters()) {
             method.addParameter(ParameterSpec.builder(javaType(parameter.type()), parameterName(parameter.name())).build());
         }
         return method.build();
     }
 
-    private static String javadoc(ExpressionFunction function) {
+    /**
+     * Javadoc of a generated method: the description, if any, then the identifier of the formula.
+     */
+    static String javadoc(String description, String name) {
         StringBuilder text = new StringBuilder();
-        if (function.description() != null && !function.description().isBlank()) {
-            text.append(JavaSources.javadocText(function.description().strip())).append("\n\n");
+        if (description != null && !description.isBlank()) {
+            text.append(JavaSources.javadocText(description.strip())).append("\n\n");
         }
-        return text.append("<p>Formula identifier: {@code ").append(JavaSources.javadocText(function.name()))
+        return text.append("<p>Formula identifier: {@code ").append(JavaSources.javadocText(name))
                 .append("}").toString();
     }
 
@@ -105,7 +108,10 @@ final class ExpressionFunctionGenerator {
         return SourceVersion.isKeyword(result) ? result + "Function" : result;
     }
 
-    private static String parameterName(String name) {
+    /**
+     * The Java name of a parameter; a Java keyword gets the suffix {@code _}.
+     */
+    static String parameterName(String name) {
         return SourceVersion.isKeyword(name) ? name + "_" : name;
     }
 }

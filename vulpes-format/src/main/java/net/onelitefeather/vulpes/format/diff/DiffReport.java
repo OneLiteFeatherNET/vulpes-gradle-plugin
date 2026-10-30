@@ -9,7 +9,8 @@ import java.util.Objects;
  */
 public record DiffReport(String project, String fromVersion, String toVersion, VersionBump requiredBump,
                          EntityDiff items, EntityDiff attributes, EntityDiff fonts, EntityDiff sounds,
-                         EntityDiff advancements, EntityDiff expressionFunctions, PackDiff packs) {
+                         EntityDiff advancements, EntityDiff expressionFunctions, EntityDiff expressions,
+                         PackDiff packs) {
 
     public DiffReport {
         Objects.requireNonNull(project, "project");
@@ -21,7 +22,8 @@ public record DiffReport(String project, String fromVersion, String toVersion, V
     /** Whether any entity or pack differs. */
     public boolean hasChanges() {
         return items.hasChanges() || attributes.hasChanges() || fonts.hasChanges() || sounds.hasChanges()
-                || advancements.hasChanges() || expressionFunctions.hasChanges() || packs.hasChanges();
+                || advancements.hasChanges() || expressionFunctions.hasChanges() || expressions.hasChanges()
+                || packs.hasChanges();
     }
 
     /** Markdown for people, with the changes grouped by entity type. */
