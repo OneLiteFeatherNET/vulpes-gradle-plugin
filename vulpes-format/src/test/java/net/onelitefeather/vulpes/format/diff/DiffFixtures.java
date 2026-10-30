@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 import net.onelitefeather.vulpes.format.Attribute;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.Expression;
 import net.onelitefeather.vulpes.format.ExpressionFunction;
 import net.onelitefeather.vulpes.format.ExpressionFunctionKind;
 import net.onelitefeather.vulpes.format.ExpressionParameter;
@@ -27,6 +28,7 @@ final class DiffFixtures {
     static final UUID CRIT = UUID.fromString("ff4741e6-d71f-5ef3-9fc3-d24e4d136193");
     static final UUID IN_ARENA = UUID.fromString("709b4d25-2545-5bde-a8bf-06d9fef28803");
     static final UUID ARMOR_DAMAGE = UUID.fromString("c91dab27-e52f-5b83-aa81-cb2b3d8a971e");
+    static final UUID MAX_HEALTH = UUID.fromString("0f4b8c2e-6d1a-5e7b-a3c9-41d2e8f07b65");
     static final String OLD_SWORD = "cygnus:old_sword";
     static final String IRON_SWORD = "cygnus:iron_sword";
     static final String STEEL_SWORD = "cygnus:steel_sword";
@@ -53,9 +55,18 @@ final class DiffFixtures {
                 expression);
     }
 
+    static Expression maxHealth(List<ExpressionParameter> variables, ExpressionType returnType, String expression) {
+        return new Expression(MAX_HEALTH, List.of(), "maxHealth", "Lebenspunkte", variables, returnType, expression);
+    }
+
     static Snapshot snapshot(List<Item> items, List<Attribute> attributes, List<ExpressionFunction> functions) {
+        return snapshot(items, attributes, functions, List.of());
+    }
+
+    static Snapshot snapshot(List<Item> items, List<Attribute> attributes, List<ExpressionFunction> functions,
+                             List<Expression> expressions) {
         return new Snapshot(1, PROJECT_ID, "cygnus", items, attributes, List.of(), List.of(), List.of(), functions,
-                List.of(), new PackSettings(List.of(16), "{\"text\":\"Cygnus\"}"));
+                expressions, List.of(), new PackSettings(List.of(16), "{\"text\":\"Cygnus\"}"));
     }
 
     static Pack pack(String id, String sha1) {

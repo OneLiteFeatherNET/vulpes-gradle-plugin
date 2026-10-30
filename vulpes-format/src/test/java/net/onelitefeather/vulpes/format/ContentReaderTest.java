@@ -39,7 +39,7 @@ final class ContentReaderTest {
         assertEquals("cygnus", release.project(), "project");
         assertEquals(UUID.fromString(PROJECT_ID), release.projectId(), "projectId");
         assertEquals("1.4.0", release.version(), "version");
-        assertEquals("sha256:046d3f84a66ba0940f6686d2679df8ac03d02c0350e0312e79feac5c9318b0b4", release.revision(), "revision");
+        assertEquals("sha256:a79f668ed6c27316205f5638b5bfcfc887ec0c28a6fbaac50908771fa5518a51", release.revision(), "revision");
         assertEquals(
                 List.of(
                         new Pack("16x", 16,
@@ -118,6 +118,26 @@ final class ContentReaderTest {
     }
 
     @Test
+    void readsExpressionWithVariablesInDeclarationOrderAndPreviousNames() {
+        List<Expression> expressions = readFixturePair().snapshot().expressions();
+
+        assertEquals(new Expression(UUID.fromString("0f4b8c2e-6d1a-5e7b-a3c9-41d2e8f07b65"), List.of("oldHealth"),
+                "maxHealth", "Maximale Lebenspunkte nach Stufe",
+                List.of(new ExpressionParameter("level", ExpressionType.NUMBER)), ExpressionType.NUMBER,
+                "20 + level * armorDamage(2, 0)"), expressions.get(0), "expression");
+    }
+
+    @Test
+    void rejectsExpressionNamedLikeExpressionFunction() {
+        ObjectNode snapshot = (ObjectNode) tree(bytes(SNAPSHOT_FIXTURE));
+        ((ObjectNode) snapshot.get("expressions").get(0)).put("name", "armorDamage");
+
+        ContentFormatException e = rejectedSnapshot(snapshot);
+
+        assertMessageContains(e, SOURCE + ": snapshot.json: $.expressions[0].name", "armorDamage");
+    }
+
+    @Test
     void readsAssetsWithNullableTextureResolution() {
         List<Asset> assets = readFixturePair().snapshot().assets();
 
@@ -176,7 +196,7 @@ final class ContentReaderTest {
         ContentFormatException e = assertThrows(ContentFormatException.class,
                 () -> ContentReader.read(SOURCE, bytes(RELEASE_FIXTURE), snapshot));
 
-        assertMessageContains(e, "sha256:046d3f84a66ba0940f6686d2679df8ac03d02c0350e0312e79feac5c9318b0b4",
+        assertMessageContains(e, "sha256:a79f668ed6c27316205f5638b5bfcfc887ec0c28a6fbaac50908771fa5518a51",
                 "sha256:" + sha256Hex(snapshot));
     }
 

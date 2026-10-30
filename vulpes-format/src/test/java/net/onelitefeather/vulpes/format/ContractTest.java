@@ -85,6 +85,11 @@ final class ContractTest {
     }
 
     @Test
+    void expressionsAreSortedByName() {
+        assertSortedBy("expressions", "name");
+    }
+
+    @Test
     void assetsAreSortedByPath() {
         assertSortedBy("assets", "path");
     }
@@ -105,6 +110,8 @@ final class ContractTest {
         }
         snapshot.get("expressionFunctions")
                 .forEach(function -> assertSortedArray("expressionFunctions[].previousNames", function.get("previousNames")));
+        snapshot.get("expressions")
+                .forEach(expression -> assertSortedArray("expressions[].previousNames", expression.get("previousNames")));
     }
 
     @Test

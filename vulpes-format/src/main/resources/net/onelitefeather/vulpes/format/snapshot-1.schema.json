@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://onelitefeather.net/schemas/vulpes/snapshot-1.json",
   "title": "Vulpes content snapshot (META-INF/vulpes/snapshot.json), format 1",
-  "description": "Canonical snapshot of every entity of one project. UTF-8, sorted object keys, no insignificant whitespace; every list sorted as stated. Defaults are resolved by the backend: consumers never invent values. References to client resources use Minecraft resource locations; assets[] maps them to pack paths. Uniqueness (not expressible in JSON Schema): key is unique within each entity list, assets[].path is unique, expressionFunctions[].name is unique. Every resource location an entity uses (fonts[].file, sounds[].sounds[].name with type=file, advancements[].background) MUST have a matching assets[] entry; the backend validates this before freezing a release and the generator aborts on a missing asset. id is unique across the whole snapshot. A previous key or name never equals a current key or name of the same list.",
+  "description": "Canonical snapshot of every entity of one project. UTF-8, sorted object keys, no insignificant whitespace; every list sorted as stated. Defaults are resolved by the backend: consumers never invent values. References to client resources use Minecraft resource locations; assets[] maps them to pack paths. Uniqueness (not expressible in JSON Schema): key is unique within each entity list, assets[].path is unique, expressionFunctions[].name and expressions[].name are unique together. Every resource location an entity uses (fonts[].file, sounds[].sounds[].name with type=file, advancements[].background) MUST have a matching assets[] entry; the backend validates this before freezing a release and the generator aborts on a missing asset. id is unique across the whole snapshot. A previous key or name never equals a current key or name of the same list.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,6 +15,7 @@
     "sounds",
     "advancements",
     "expressionFunctions",
+    "expressions",
     "assets",
     "pack"
   ],
@@ -71,6 +72,13 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/expressionFunction"
+      }
+    },
+    "expressions": {
+      "description": "Named formulas with variables and a return type, sorted by name.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/expression"
       }
     },
     "assets": {
@@ -511,6 +519,72 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "previousNames",
+        "name",
+        "description",
+        "variables",
+        "returnType",
+        "expression"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/entityId"
+        },
+        "previousNames": {
+          "description": "Names this expression had earlier within the current major version, sorted.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          }
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variables": {
+          "description": "In declaration order.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              },
+              "type": {
+                "$ref": "#/$defs/expressionType"
+              }
+            }
+          }
+        },
+        "returnType": {
+          "$ref": "#/$defs/expressionType"
+        },
+        "expression": {
+          "description": "Formula source, evaluated with the variables as identifiers.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },

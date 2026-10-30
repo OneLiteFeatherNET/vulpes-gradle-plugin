@@ -44,7 +44,7 @@ dependencyResolutionManagement {
             version("junit", "6.1.3")
             version("json-schema-validator", "3.0.8")
             version("shadow", "9.6.1")
-            version("vulpes-base", "0.5.0")
+            version("vulpes-base", "0.6.0")
 
             library("adventure.key", "net.kyori", "adventure-key").versionRef("adventure-key")
             library("javapoet", "com.palantir.javapoet", "javapoet").versionRef("javapoet")
