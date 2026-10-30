@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -27,6 +29,11 @@ final class VulpesPluginFunctionalTest {
     private static final String GENERATED = "build/generated/sources/vulpes/java/main/";
     private static final String CYGNUS_SOURCE = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusRelease.java";
     private static final String CYGNUS_CLASS = "build/classes/java/main/net/onelitefeather/vulpes/content/cygnus/CygnusRelease.class";
+    private static final String MANIS = "manis";
+    private static final String DIFF_REPORTS = "build/reports/vulpes/diff/";
+    private static final String CYGNUS_DIFF_MARKDOWN = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.md";
+    private static final String CYGNUS_DIFF_JSON = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.json";
+    private static final String FROM_1_4_0 = "-Pvulpes.diff.from=1.4.0";
 
     @Test
     void generatesReleaseClassSourceForDataJar(@TempDir Path dir) throws IOException {
@@ -247,6 +254,127 @@ final class VulpesPluginFunctionalTest {
                 "message must name the missing java plugin:\n" + result.getOutput());
     }
 
+    @Test
+    void writesMarkdownReportWithRenamedItem(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishSwordRenamedInVersion15(workspace);
+
+        workspace.runner(FROM_1_4_0, "vulpesDiff").build();
+
+        String markdown = Files.readString(workspace.file(CYGNUS_DIFF_MARKDOWN), StandardCharsets.UTF_8);
+        assertTrue(markdown.contains("`cygnus:iron_sword` -> `cygnus:steel_sword`"),
+                "markdown must list the renamed item:\n" + markdown);
+    }
+
+    @Test
+    void writesJsonReportWithRequiredBump(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishSwordRenamedInVersion15(workspace);
+
+        workspace.runner(FROM_1_4_0, "vulpesDiff").build();
+
+        String bump = new ObjectMapper().readTree(Files.readString(workspace.file(CYGNUS_DIFF_JSON)))
+                .get("requiredBump").asText();
+        assertEquals("MINOR", bump, "requiredBump in the JSON report: renamed item keeps its old key as alias");
+    }
+
+    @Test
+    void namesRequiredBumpInConsoleSummary(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishSwordRenamedInVersion15(workspace);
+
+        BuildResult result = workspace.runner(FROM_1_4_0, "vulpesDiff").build();
+
+        assertTrue(result.getOutput().contains("required version bump MINOR"),
+                "console summary must name the bump:\n" + result.getOutput());
+        assertTrue(result.getOutput().contains("cygnus-1.4.0-1.5.0.md"),
+                "console summary must name the report file:\n" + result.getOutput());
+    }
+
+    @Test
+    void failsWithoutFromPropertyAndNamesIt(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishSwordRenamedInVersion15(workspace);
+
+        BuildResult result = workspace.runner("vulpesDiff").buildAndFail();
+
+        assertTrue(result.getOutput().contains("vulpes.diff.from"),
+                "message must name the missing property:\n" + result.getOutput());
+    }
+
+    @Test
+    void comparesOnlyProjectSelectedByProperty(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishUnchangedProject(workspace, CYGNUS);
+        publishUnchangedProject(workspace, MANIS);
+        workspace.build("""
+                dependencies {
+                    vulpes("net.onelitefeather.vulpes.content:cygnus:1.5.0")
+                    vulpes("net.onelitefeather.vulpes.content:manis:1.5.0")
+                }
+                """);
+
+        workspace.runner(FROM_1_4_0, "-Pvulpes.diff.project=manis", "vulpesDiff").build();
+
+        assertTrue(Files.isRegularFile(workspace.file(DIFF_REPORTS + "manis-1.4.0-1.5.0.md")),
+                "report of the selected project manis");
+        assertFalse(Files.exists(workspace.file(CYGNUS_DIFF_MARKDOWN)),
+                "cygnus is not selected, so it must not be compared");
+    }
+
+    @Test
+    void reportsNoChangesForEqualReleases(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishUnchangedProject(workspace, CYGNUS);
+        workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.5.0\") }");
+
+        workspace.runner(FROM_1_4_0, "vulpesDiff").build();
+
+        String markdown = Files.readString(workspace.file(CYGNUS_DIFF_MARKDOWN), StandardCharsets.UTF_8);
+        assertTrue(markdown.contains("No changes."), "report of equal releases:\n" + markdown);
+    }
+
+    @Test
+    void secondDiffRunWithConfigurationCacheReusesCacheEntry(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        publishSwordRenamedInVersion15(workspace);
+        workspace.runner("--configuration-cache", FROM_1_4_0, "vulpesDiff").build();
+
+        BuildResult result = workspace.runner("--configuration-cache", FROM_1_4_0, "vulpesDiff").build();
+
+        assertTrue(result.getOutput().contains("Configuration cache entry reused"),
+                "second run must reuse the configuration cache:\n" + result.getOutput());
+    }
+
+    /** Publishes cygnus 1.4.0 and a 1.5.0 in which item cygnus:iron_sword became cygnus:steel_sword. */
+    private static void publishSwordRenamedInVersion15(Workspace workspace) throws IOException {
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson(), DataJarFixtures.snapshotJson());
+        DataJarFixtures.Metadata renamed = DataJarFixtures.modifySnapshot(DataJarFixtures.releaseJson(),
+                DataJarFixtures.snapshotJson(), snapshot -> {
+                    ObjectNode sword = (ObjectNode) snapshot.get("items").get(0);
+                    sword.put("key", "cygnus:steel_sword");
+                    ArrayNode previousKeys = sword.putArray("previousKeys");
+                    previousKeys.add("cygnus:iron_sword");
+                    previousKeys.add("cygnus:old_sword");
+                });
+        workspace.publish(CYGNUS, "1.5.0", DataJarFixtures.modifyRelease(renamed.releaseJson(),
+                release -> release.put("version", "1.5.0")), renamed.snapshotJson());
+        workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.5.0\") }");
+    }
+
+    /** Publishes version 1.4.0 and 1.5.0 of a project whose content did not change. */
+    private static void publishUnchangedProject(Workspace workspace, String project) throws IOException {
+        workspace.publish(project, VERSION, releaseOf(project, VERSION), DataJarFixtures.snapshotJson());
+        workspace.publish(project, "1.5.0", releaseOf(project, "1.5.0"), DataJarFixtures.snapshotJson());
+    }
+
+    private static byte[] releaseOf(String project, String version) {
+        return DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(), release -> {
+            release.put("project", project);
+            release.put("version", version);
+        });
+    }
+
     private static TaskOutcome outcome(BuildResult result, String path) {
         BuildTask task = result.task(path);
         assertNotNull(task, path + " must have run: " + tasks(result));
@@ -293,8 +421,11 @@ final class VulpesPluginFunctionalTest {
         }
 
         void publish(String artifactId, String version, byte[] releaseJson) {
-            DataJarFixtures.writeMavenModule(repository, artifactId, version, releaseJson,
-                    DataJarFixtures.snapshotJson());
+            publish(artifactId, version, releaseJson, DataJarFixtures.snapshotJson());
+        }
+
+        void publish(String artifactId, String version, byte[] releaseJson, byte[] snapshotJson) {
+            DataJarFixtures.writeMavenModule(repository, artifactId, version, releaseJson, snapshotJson);
         }
 
         String repositoryUri() {
