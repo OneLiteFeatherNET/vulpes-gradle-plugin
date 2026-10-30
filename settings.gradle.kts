@@ -5,6 +5,10 @@ pluginManagement {
     }
 }
 
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 rootProject.name = "vulpes-gradle-plugin-build"
 
 include("vulpes-format", "vulpes-codegen", "vulpes-gradle-plugin")
