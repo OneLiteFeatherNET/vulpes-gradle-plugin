@@ -1,16 +1,13 @@
 package net.onelitefeather.vulpes.gradle;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import net.onelitefeather.vulpes.format.ContentFormatException;
-import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
 import net.onelitefeather.vulpes.format.diff.ContentDiff;
 import net.onelitefeather.vulpes.format.diff.DiffReport;
@@ -70,8 +67,10 @@ public abstract class VulpesDiffTask extends DefaultTask {
             throw new GradleException("vulpesDiff needs the version to compare with: "
                     + "run it with -Pvulpes.diff.from=<version>");
         }
-        Map<String, ContentRelease> current = read(getDataJars(), getArtifactIdsByFileName().get());
-        Map<String, ContentRelease> base = read(getBaseDataJars(), getBaseArtifactIdsByFileName().get());
+        Map<String, ContentRelease> current =
+                byArtifactId(DataJarReader.read(getDataJars(), getArtifactIdsByFileName().get()));
+        Map<String, ContentRelease> base =
+                byArtifactId(DataJarReader.read(getBaseDataJars(), getBaseArtifactIdsByFileName().get()));
         String filter = getProjectFilter().getOrNull();
         Path reports = getReportDirectory().get().getAsFile().toPath();
 
@@ -108,27 +107,12 @@ public abstract class VulpesDiffTask extends DefaultTask {
         return "required version bump " + report.requiredBump();
     }
 
-    private static Map<String, ContentRelease> read(ConfigurableFileCollection jars, Map<String, String> artifactIds) {
-        Map<String, ContentRelease> releases = new TreeMap<>();
-        for (File jar : jars.getFiles().stream().sorted(Comparator.comparing(File::getName)).toList()) {
-            String artifactId = artifactIds.get(jar.getName());
-            if (artifactId == null) {
-                throw new GradleException(jar.getName() + ": no artifact id is known for this data JAR");
-            }
-            ContentRelease content;
-            try {
-                content = ContentReader.read(jar.toPath());
-            } catch (ContentFormatException e) {
-                throw new GradleException(e.getMessage(), e);
-            }
-            String project = content.release().project();
-            if (!project.equals(artifactId)) {
-                throw new GradleException(jar.getName() + ": release.json project '" + project
-                        + "' does not match artifact '" + artifactId + "'");
-            }
-            releases.put(artifactId, content);
+    private static Map<String, ContentRelease> byArtifactId(List<ContentRelease> releases) {
+        Map<String, ContentRelease> byArtifact = new TreeMap<>();
+        for (ContentRelease content : releases) {
+            byArtifact.put(content.release().project(), content);
         }
-        return releases;
+        return byArtifact;
     }
 
     private static void write(Path file, String content) {
