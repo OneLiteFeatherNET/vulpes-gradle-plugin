@@ -1,6 +1,5 @@
 package net.onelitefeather.vulpes.gradle;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -15,8 +14,6 @@ import net.onelitefeather.vulpes.codegen.CodegenException;
 import net.onelitefeather.vulpes.codegen.GeneratedSource;
 import net.onelitefeather.vulpes.codegen.Template;
 import net.onelitefeather.vulpes.codegen.Templates;
-import net.onelitefeather.vulpes.format.ContentFormatException;
-import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -72,7 +69,7 @@ public abstract class VulpesGenerateTask extends DefaultTask {
         clear(output);
 
         Template template = VulpesTemplates.select(getTemplate().get());
-        List<ContentRelease> releases = readReleases();
+        List<ContentRelease> releases = DataJarReader.read(getDataJars(), getArtifactIdsByFileName().get());
         List<String> projects = new ArrayList<>();
         releases.forEach(content -> projects.add(content.release().project()));
         Map<String, String> packages;
@@ -95,30 +92,6 @@ public abstract class VulpesGenerateTask extends DefaultTask {
                         source.source());
             }
         }
-    }
-
-    private List<ContentRelease> readReleases() {
-        Map<String, String> artifactIds = getArtifactIdsByFileName().get();
-        List<ContentRelease> releases = new ArrayList<>();
-        for (File jar : getDataJars().getFiles().stream().sorted(Comparator.comparing(File::getName)).toList()) {
-            String artifactId = artifactIds.get(jar.getName());
-            if (artifactId == null) {
-                throw new GradleException(jar.getName() + ": no artifact id is known for this data JAR");
-            }
-            ContentRelease content;
-            try {
-                content = ContentReader.read(jar.toPath());
-            } catch (ContentFormatException e) {
-                throw new GradleException(e.getMessage(), e);
-            }
-            String project = content.release().project();
-            if (!project.equals(artifactId)) {
-                throw new GradleException(jar.getName() + ": release.json project '" + project
-                        + "' does not match artifact '" + artifactId + "'");
-            }
-            releases.add(content);
-        }
-        return releases;
     }
 
     private static void clear(Path directory) {
