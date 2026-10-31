@@ -92,8 +92,7 @@ final class ContentBootstrapTest {
     }
 
     /**
-     * Bootstraps the generated content of the fixture. The enchantments of the fixture item are left out: vulpes-base
-     * decodes components without the registries of a server, and the enchantment codec needs them.
+     * Bootstraps the generated content of the fixture.
      */
     private static VulpesRegistries bootstrapFixture(Path output) throws IOException, ReflectiveOperationException {
         GeneratedSourcesCompileTest.compile(
