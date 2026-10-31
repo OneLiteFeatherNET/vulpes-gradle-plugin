@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.2.0...v0.3.0) (2026-10-31)
+
+
+### Features
+
+* **codegen:** reject project functions named like built-in ones ([#16](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/16)) ([0ad8333](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/0ad8333af427fa3a67909a33507cd5be5ec7b1c4))
+
 ## [0.2.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.1.0...v0.2.0) (2026-10-30)
 
 
