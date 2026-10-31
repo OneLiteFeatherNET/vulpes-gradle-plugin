@@ -457,6 +457,30 @@ final class VulpesPluginFunctionalTest {
                 "implementation must name adventure-key in the version of the plugin:\n" + result.getOutput());
     }
 
+    @Test
+    void failsWhenProjectFunctionIsNamedLikeBuiltInFunction(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        DataJarFixtures.Metadata shadowing = DataJarFixtures.modifySnapshot(DataJarFixtures.releaseJson(),
+                DataJarFixtures.snapshotJson(), snapshot -> {
+                    ObjectNode function = ((ArrayNode) snapshot.get("expressionFunctions")).addObject();
+                    function.put("id", "7d1e2f3a-4b5c-4d6e-8f70-819a2b3c4d5e");
+                    function.put("kind", "interface");
+                    function.put("name", "max");
+                    function.putNull("description");
+                    function.putNull("expression");
+                    function.putArray("parameters");
+                    function.putArray("previousNames");
+                    function.put("returnType", "number");
+                });
+        workspace.publish(CYGNUS, VERSION, shadowing.releaseJson(), shadowing.snapshotJson());
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("max"),
+                "message must name the function shadowing the built-in max:\n" + result.getOutput());
+    }
+
     private static TaskOutcome outcome(BuildResult result, String path) {
         BuildTask task = result.task(path);
         assertNotNull(task, path + " must have run: " + tasks(result));
