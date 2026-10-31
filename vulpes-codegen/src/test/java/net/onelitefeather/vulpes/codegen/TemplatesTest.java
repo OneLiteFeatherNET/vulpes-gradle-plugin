@@ -9,6 +9,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.ExpressionFunctionKind;
+import net.onelitefeather.vulpes.format.ExpressionType;
 import org.junit.jupiter.api.Test;
 
 final class TemplatesTest {
@@ -106,6 +108,56 @@ final class TemplatesTest {
 
         assertEquals(ReleaseClassWriter.write(TestContents.PACKAGE, content.release()), release.source(),
                 "the release class is the one of the release writer");
+    }
+
+    @Test
+    void functionNamedLikeBuiltInMaxFailsNamingIt() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .function(TestContents.function("max", ExpressionFunctionKind.INTERFACE, ExpressionType.NUMBER))
+                .build());
+
+        CodegenException exception = assertThrows(CodegenException.class,
+                () -> Templates.generate(Templates.minestom(VULPES_BASE), content, TestContents.PACKAGE),
+                "a function named like the built-in max must be rejected");
+
+        assertTrue(exception.getMessage().contains("max"), "message must name the function: " + exception.getMessage());
+    }
+
+    @Test
+    void expressionNamedLikeBuiltInIfIgnoringCaseFailsNamingIt() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .expression(TestContents.expression("IF", ExpressionType.NUMBER, "1"))
+                .build());
+
+        CodegenException exception = assertThrows(CodegenException.class,
+                () -> Templates.generate(Templates.minestom(VULPES_BASE), content, TestContents.PACKAGE),
+                "an expression named like the built-in IF must be rejected");
+
+        assertTrue(exception.getMessage().contains("IF"), "message must name the expression: " + exception.getMessage());
+    }
+
+    @Test
+    void unrelatedNamesPassTheCheck() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .function(TestContents.function("armor_damage", ExpressionFunctionKind.INTERFACE, ExpressionType.NUMBER))
+                .expression(TestContents.expression("maxHealth", ExpressionType.NUMBER, "20"))
+                .build());
+
+        assertFalse(Templates.generate(Templates.minestom(VULPES_BASE), content, TestContents.PACKAGE).isEmpty(),
+                "names that are no built-in function must generate");
+    }
+
+    @Test
+    void keysTemplateAlsoRejectsBuiltInNames() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .function(TestContents.function("max", ExpressionFunctionKind.INTERFACE, ExpressionType.NUMBER))
+                .build());
+
+        CodegenException exception = assertThrows(CodegenException.class,
+                () -> Templates.generate(Templates.keys(ADVENTURE_KEY), content, TestContents.PACKAGE),
+                "the keys template must reject built-in names too");
+
+        assertTrue(exception.getMessage().contains("max"), "message must name the function: " + exception.getMessage());
     }
 
     private static Template itemsOnly() {

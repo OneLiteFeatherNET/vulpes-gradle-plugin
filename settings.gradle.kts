@@ -37,6 +37,7 @@ dependencyResolutionManagement {
     versionCatalogs {
         create("libs") {
             version("adventure-key", "5.2.0")
+            version("evalex", "3.8.0")
             version("jackson", "2.22.4")
             version("javapoet", "0.22.0")
             version("minestom", "2026.10.07-26.2")
@@ -47,6 +48,7 @@ dependencyResolutionManagement {
             version("vulpes-base", "0.6.0")
 
             library("adventure.key", "net.kyori", "adventure-key").versionRef("adventure-key")
+            library("evalex", "com.ezylang", "EvalEx").versionRef("evalex")
             library("javapoet", "com.palantir.javapoet", "javapoet").versionRef("javapoet")
             library("minestom", "net.minestom", "minestom").versionRef("minestom")
             library("vulpes.base", "net.onelitefeather.vulpes", "vulpes-base").versionRef("vulpes-base")

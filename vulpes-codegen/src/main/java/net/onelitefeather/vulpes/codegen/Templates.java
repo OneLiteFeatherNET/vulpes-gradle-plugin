@@ -1,5 +1,7 @@
 package net.onelitefeather.vulpes.codegen;
 
+import com.ezylang.evalex.config.ExpressionConfiguration;
+import com.ezylang.evalex.config.FunctionDictionaryIfc;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -9,6 +11,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import net.onelitefeather.vulpes.format.ContentRelease;
+import net.onelitefeather.vulpes.format.Expression;
+import net.onelitefeather.vulpes.format.ExpressionFunction;
 import net.onelitefeather.vulpes.format.Snapshot;
 
 /**
@@ -67,7 +71,29 @@ public final class Templates {
                     + unsupported.stream().map(EntityType::label).collect(Collectors.joining(", "))
                     + " of project '" + content.release().project() + "'");
         }
+        rejectBuiltInFunctionNames(content);
         return template.generate(content, packageName);
+    }
+
+    /**
+     * A project function or expression named like a built-in EvalEx function would silently replace it in every
+     * formula, so the name is rejected for every template, ignoring case.
+     *
+     * @throws CodegenException naming every offending function or expression
+     */
+    private static void rejectBuiltInFunctionNames(ContentRelease content) {
+        FunctionDictionaryIfc builtIns = ExpressionConfiguration.defaultConfiguration().getFunctionDictionary();
+        Snapshot snapshot = content.snapshot();
+        List<String> names = new ArrayList<>();
+        snapshot.expressionFunctions().stream().map(ExpressionFunction::name)
+                .filter(builtIns::hasFunction).forEach(names::add);
+        snapshot.expressions().stream().map(Expression::name)
+                .filter(builtIns::hasFunction).forEach(names::add);
+        if (!names.isEmpty()) {
+            throw new CodegenException("names of built-in functions cannot be used by project '"
+                    + content.release().project() + "': " + names.stream().map(name -> "'" + name + "'")
+                    .collect(Collectors.joining(", ")));
+        }
     }
 
     private static boolean isPresent(Snapshot snapshot, EntityType type) {

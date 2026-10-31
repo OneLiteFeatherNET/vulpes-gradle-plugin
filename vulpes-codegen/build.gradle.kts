@@ -5,6 +5,7 @@ plugins {
 dependencies {
     api(project(":vulpes-format"))
     implementation(libs.javapoet)
+    implementation(libs.evalex)
 
     testImplementation(testFixtures(project(":vulpes-format")))
     testImplementation(libs.vulpes.base)
