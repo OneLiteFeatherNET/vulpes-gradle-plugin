@@ -7,7 +7,7 @@ Code generation SHALL write `<Project>SpaceGlyphs` for every project and every t
 
 #### Scenario: Glyph codepoints
 - **WHEN** code generation writes `<Project>SpaceGlyphs`
-- **THEN** `NEGATIVE_1`..`NEGATIVE_8` are ``..``, `NEGATIVE_16`, `NEGATIVE_32`, `NEGATIVE_64`, `NEGATIVE_128` and `NEGATIVE_256` are ``..``, `ZERO` is ``, `POSITIVE_1`..`POSITIVE_8` are ``..``, and `POSITIVE_16`, `POSITIVE_32`, `POSITIVE_64`, `POSITIVE_128` and `POSITIVE_256` are ``..``
+- **THEN** `NEGATIVE_1`..`NEGATIVE_8` are `\uF001`..`\uF008`, `NEGATIVE_16`, `NEGATIVE_32`, `NEGATIVE_64`, `NEGATIVE_128` and `NEGATIVE_256` are `\uF009`..`\uF00D`, `ZERO` is `\uF00E`, `POSITIVE_1`..`POSITIVE_8` are `\uF00F`..`\uF016`, and `POSITIVE_16`, `POSITIVE_32`, `POSITIVE_64`, `POSITIVE_128` and `POSITIVE_256` are `\uF017`..`\uF01B`
 
 #### Scenario: Project without fonts
 - **WHEN** the snapshot contains no fonts
