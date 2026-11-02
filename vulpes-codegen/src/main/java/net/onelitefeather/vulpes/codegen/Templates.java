@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import net.onelitefeather.vulpes.format.ContentRelease;
 import net.onelitefeather.vulpes.format.Expression;
 import net.onelitefeather.vulpes.format.ExpressionFunction;
+import net.onelitefeather.vulpes.format.FontSymbol;
 import net.onelitefeather.vulpes.format.Snapshot;
 
 /**
@@ -23,6 +24,7 @@ public final class Templates {
 
     private static final String VULPES_BASE_GROUP = "net.onelitefeather.vulpes";
     private static final String ADVENTURE_KEY_GROUP = "net.kyori";
+    private static final String RESERVED_FONT_NAMESPACE = "space";
 
     private Templates() {
     }
@@ -72,6 +74,7 @@ public final class Templates {
                     + " of project '" + content.release().project() + "'");
         }
         rejectBuiltInFunctionNames(content);
+        rejectReservedFontNamespace(content);
         return template.generate(content, packageName);
     }
 
@@ -94,6 +97,32 @@ public final class Templates {
                     + content.release().project() + "': " + names.stream().map(name -> "'" + name + "'")
                     .collect(Collectors.joining(", ")));
         }
+    }
+
+    /**
+     * The namespace {@code space} belongs to the space font that every resource pack contains, so a project font
+     * in it, by its key or as the font of a symbol, would clash with the space glyphs.
+     *
+     * @throws CodegenException naming every key in the reserved namespace
+     */
+    private static void rejectReservedFontNamespace(ContentRelease content) {
+        List<String> keys = new ArrayList<>();
+        for (FontSymbol font : content.snapshot().fonts()) {
+            if (isReserved(font.key())) {
+                keys.add(font.key());
+            } else if (isReserved(font.font())) {
+                keys.add(font.key() + " (font " + font.font() + ")");
+            }
+        }
+        if (!keys.isEmpty()) {
+            throw new CodegenException("fonts in the reserved namespace '" + RESERVED_FONT_NAMESPACE
+                    + "' cannot be used by project '" + content.release().project() + "': "
+                    + keys.stream().distinct().map(key -> "'" + key + "'").collect(Collectors.joining(", ")));
+        }
+    }
+
+    private static boolean isReserved(String key) {
+        return key.startsWith(RESERVED_FONT_NAMESPACE + ":");
     }
 
     private static boolean isPresent(Snapshot snapshot, EntityType type) {
@@ -157,6 +186,7 @@ public final class Templates {
                     snapshot.sounds().stream().map(EntryKeys::of).toList()));
             sources.add(KeysGenerator.generate(context, EntityType.ADVANCEMENTS,
                     snapshot.advancements().stream().map(EntryKeys::of).toList()));
+            sources.add(SpaceGlyphGenerator.generate(context));
             if (entries) {
                 sources.add(ItemGenerator.generate(context, snapshot.items()));
                 sources.add(AttributeGenerator.generate(context, snapshot.attributes()));

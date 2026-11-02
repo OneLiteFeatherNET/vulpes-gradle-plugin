@@ -481,6 +481,31 @@ final class VulpesPluginFunctionalTest {
                 "message must name the function shadowing the built-in max:\n" + result.getOutput());
     }
 
+    @Test
+    void failsWhenFontIsInReservedSpaceNamespace(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        DataJarFixtures.Metadata reserved = DataJarFixtures.modifySnapshot(DataJarFixtures.releaseJson(),
+                DataJarFixtures.snapshotJson(), snapshot -> {
+                    ObjectNode font = ((ArrayNode) snapshot.get("fonts")).addObject();
+                    font.put("id", "3c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f");
+                    font.put("key", "cygnus:space_icons");
+                    font.put("font", "space:default");
+                    font.put("type", "bitmap");
+                    font.put("file", "cygnus:font/space_icons.png");
+                    font.put("ascent", 7);
+                    font.put("height", 8);
+                    font.putArray("chars");
+                    font.putArray("previousKeys");
+                });
+        workspace.publish(CYGNUS, VERSION, reserved.releaseJson(), reserved.snapshotJson());
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("'cygnus:space_icons (font space:default)'"),
+                "message must name the font key in the reserved namespace:\n" + result.getOutput());
+    }
+
     private static TaskOutcome outcome(BuildResult result, String path) {
         BuildTask task = result.task(path);
         assertNotNull(task, path + " must have run: " + tasks(result));
