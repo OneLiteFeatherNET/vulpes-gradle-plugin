@@ -57,7 +57,8 @@ final class TemplatesTest {
 
         List<String> names = sources.stream().map(GeneratedSource::className).toList();
         assertEquals(List.of("CygnusRelease", "CygnusItemKeys", "CygnusAttributeKeys", "CygnusFontSymbolKeys",
-                "CygnusSoundKeys", "CygnusAdvancementKeys", "CygnusExpressionFunctions"), names, "classes of keys");
+                "CygnusSoundKeys", "CygnusAdvancementKeys", "CygnusSpaceGlyphs", "CygnusExpressionFunctions"), names,
+                "classes of keys");
         for (GeneratedSource source : sources) {
             assertFalse(source.source().contains("import net.onelitefeather.vulpes"),
                     source.className() + " must not reference vulpes-base:\n" + source.source());
@@ -158,6 +159,34 @@ final class TemplatesTest {
                 "the keys template must reject built-in names too");
 
         assertTrue(exception.getMessage().contains("max"), "message must name the function: " + exception.getMessage());
+    }
+
+    @Test
+    void fontInSpaceNamespaceByFontFieldFailsNamingKey() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .font(TestContents.font("cygnus:icons", "space:default", "cygnus:font/icons.png", 7, 8, List.of()))
+                .build());
+
+        CodegenException exception = assertThrows(CodegenException.class,
+                () -> Templates.generate(Templates.minestom(VULPES_BASE), content, TestContents.PACKAGE),
+                "a font using the reserved space namespace must be rejected");
+
+        assertTrue(exception.getMessage().contains("'cygnus:icons (font space:default)'"),
+                "message must name the font key: " + exception.getMessage());
+    }
+
+    @Test
+    void fontKeyInSpaceNamespaceFailsNamingKeyForKeysTemplate() {
+        ContentRelease content = TestContents.content(TestContents.snapshot()
+                .font(TestContents.font("space:icons", "cygnus:hud", "cygnus:font/icons.png", 7, 8, List.of()))
+                .build());
+
+        CodegenException exception = assertThrows(CodegenException.class,
+                () -> Templates.generate(Templates.keys(ADVENTURE_KEY), content, TestContents.PACKAGE),
+                "a font key in the reserved space namespace must be rejected");
+
+        assertTrue(exception.getMessage().contains("'space:icons'"),
+                "message must name the font key: " + exception.getMessage());
     }
 
     private static Template itemsOnly() {
