@@ -4,7 +4,7 @@
 
 ## Why
 
-Every generated resource pack will contain the `space:default` font (vulpes-generator change `add-space-font-to-packs`). Its private-use characters ``..`` move the text cursor by -256..+256 pixels. Games that place a glyph directly, for example a HUD icon followed by a fixed offset, need these characters as named constants. Today each game writes them out by hand, as Manis does with its own `SpaceFont` class, and a typo in a codepoint shows up only as a misplaced HUD in the client.
+Every generated resource pack will contain the `space:default` font (vulpes-generator change `add-space-font-to-packs`). Its private-use characters `\uF001`..`\uF01B` move the text cursor by -256..+256 pixels. Games that place a glyph directly, for example a HUD icon followed by a fixed offset, need these characters as named constants. Today each game writes them out by hand, as Manis does with its own `SpaceFont` class, and a typo in a codepoint shows up only as a misplaced HUD in the client.
 
 `vulpes-base` builds offsets from the same characters (`SpaceFont.offset(int)`), but it keeps them private and is only available to the `minestom` template.
 
