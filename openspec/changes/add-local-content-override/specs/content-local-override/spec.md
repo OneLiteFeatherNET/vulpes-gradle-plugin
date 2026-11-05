@@ -22,15 +22,19 @@ For every declared content project, the plugin SHALL use the directory `<project
 - **THEN** the build fails and names the missing file and the directory, and does not fall back to the data JAR
 
 ### Requirement: Local content validation
-Local files SHALL pass the same checks as a data JAR: `release.json` and `snapshot.json` are read with the format reader, the format is supported, the `revision` matches `snapshot.json`, and `release.project` equals the directory name. A failing check SHALL fail the build with a message that names the directory and the check.
+Local files SHALL pass the same checks as a data JAR: `release.json` and `snapshot.json` are read with the format reader, the format is supported (format 1 or format 2), the `revision` matches `snapshot.json`, and `release.project` equals the directory name. The local snapshot version SHALL be in the Maven form `X.Y.Z-SNAPSHOT`, as `allow-snapshot-versions` requires. A failing check SHALL fail the build with a message that names the directory and the check.
 
 #### Scenario: Project does not match directory
 - **WHEN** `vulpes/cygnus/release.json` contains `"project": "manis"`
 - **THEN** the build fails and names `vulpes/cygnus` and both values
 
 #### Scenario: Unsupported format
-- **WHEN** `vulpes/cygnus/release.json` contains `"format": 2`
-- **THEN** the build fails and names the supported format
+- **WHEN** `vulpes/cygnus/release.json` contains `"format": 3`
+- **THEN** the build fails and names the supported formats 1 and 2
+
+#### Scenario: Format 2 accepted
+- **WHEN** `vulpes/cygnus/release.json` contains `"format": 2` with a valid `base`
+- **THEN** the local files are used and the notice prints the base
 
 ### Requirement: Undeclared local directories
 A directory in the local content directory for a project that is not declared as a `vulpes(...)` dependency SHALL NOT add content. The plugin SHALL log a warning that names the directory and states that it is ignored.
@@ -51,7 +55,7 @@ Every build that serves a declared content project from a local directory SHALL 
 - **THEN** the lifecycle output still contains the notice
 
 ### Requirement: Forbid local content
-The property `vulpes.local.forbid` SHALL default to `false`. When it is `true` and a declared content project is served from a local directory, the build SHALL fail before code is generated and the message SHALL name each such project.
+The property `vulpes.local.forbid` SHALL default to `false`. When it is `true` and a declared content project is served from a local directory, the build SHALL fail before code is generated and the message SHALL name each such project. Undeclared directories SHALL NOT cause a failure.
 
 #### Scenario: CI forbids local content
 - **WHEN** the build runs with `-Pvulpes.local.forbid=true` and `vulpes/cygnus/` is used
@@ -60,6 +64,10 @@ The property `vulpes.local.forbid` SHALL default to `false`. When it is `true` a
 #### Scenario: Forbid without local content
 - **WHEN** the build runs with `-Pvulpes.local.forbid=true` and no declared project has a local directory
 - **THEN** the build succeeds
+
+#### Scenario: Forbid with undeclared directory
+- **WHEN** the build runs with `-Pvulpes.local.forbid=true` and `vulpes/manis/` holds valid files but `manis` is not declared
+- **THEN** the build succeeds and the warning names `vulpes/manis`
 
 ### Requirement: Local files as task inputs
 The local files SHALL be inputs of the generation task and of `vulpesDiff`. Adding, changing or removing them SHALL change the inputs, so that the task re-runs. Removing a local directory SHALL switch the project back to its data JAR. The task SHALL remain cacheable and compatible with the configuration cache.
@@ -77,10 +85,10 @@ The local files SHALL be inputs of the generation task and of `vulpesDiff`. Addi
 - **THEN** the second run reuses the configuration cache
 
 ### Requirement: Base information
-When `release.json` carries `base`, the plugin SHALL print its `repository`, `branch` and `commit` in the local override notice. The plugin SHALL NOT compare `base` with the vulpes-base version it pins and SHALL NOT fail or warn because of it.
+When `release.json` in format 2 carries `base`, the plugin SHALL print its `repository`, `branch` and `commit` in the local override notice. The plugin SHALL NOT compare `base` with the vulpes-base version it pins and SHALL NOT fail or warn because of it.
 
 #### Scenario: Base is printed
-- **WHEN** local `release.json` records base branch `main` at commit `0123abc…`
+- **WHEN** local `release.json` records base branch `main` at commit `0123abc…` (full 40-character SHA)
 - **THEN** the notice contains the branch and the commit
 
 #### Scenario: Base differs from pinned version
