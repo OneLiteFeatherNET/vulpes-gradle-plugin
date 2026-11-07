@@ -22,7 +22,7 @@ For every declared content project, the plugin SHALL use the directory `<project
 - **THEN** the build fails and names the missing file and the directory, and does not fall back to the data JAR
 
 ### Requirement: Local content validation
-Local files SHALL pass the same checks as a data JAR: `release.json` and `snapshot.json` are read with the format reader, the format is supported (format 1 or format 2), the `revision` matches `snapshot.json`, and `release.project` equals the directory name. The local snapshot version SHALL be in the Maven form `X.Y.Z-SNAPSHOT`, as `allow-snapshot-versions` requires. A failing check SHALL fail the build with a message that names the directory and the check.
+Local files SHALL pass the same checks as a data JAR: `release.json` and `snapshot.json` are read with the format reader, the format is supported (format 1 or format 2), the `revision` matches `snapshot.json`, and `release.project` equals the directory name. The local version SHALL be in the Maven form `X.Y.Z` or `X.Y.Z-SNAPSHOT`, as `allow-snapshot-versions` requires: a local build carries `0.0.0-SNAPSHOT`, a downloaded published version keeps its `X.Y.Z`. A failing check SHALL fail the build with a message that names the directory and the check.
 
 #### Scenario: Project does not match directory
 - **WHEN** `vulpes/cygnus/release.json` contains `"project": "manis"`

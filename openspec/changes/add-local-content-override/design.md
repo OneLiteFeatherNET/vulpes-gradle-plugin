@@ -39,7 +39,7 @@ This supersedes the earlier plan to add `base` to format 1 without a bump. Forma
 `base.commit` is a full 40-character lowercase SHA-1. The generator emits the full SHA, so the strict pattern stays. A short commit is rejected.
 
 ### Snapshot version form
-A local snapshot version is in the Maven form `X.Y.Z-SNAPSHOT`, consistent with `allow-snapshot-versions`. This change adds no separate pattern check; the format rule of `allow-snapshot-versions` applies, and the notice prints the version as read.
+A local version is in the Maven form `X.Y.Z` or `X.Y.Z-SNAPSHOT`, consistent with `allow-snapshot-versions`: the generator writes `0.0.0-SNAPSHOT` into a local build, and a downloaded published version keeps its `X.Y.Z`. The local check uses the same version rule as the format; the notice prints the version as read.
 
 ### Base information
 `base` is printed in the notice and is not compared with `libs.versions.vulpes.base`. The plugin pins a version, but `release.json` records a branch and a commit. A branch cannot be mapped to a version, and a commit can only be mapped to a version with a Git lookup, which needs the network and is not reproducible. A mismatch can therefore not be decided reliably, so the plugin prints the recorded values and leaves the judgement to the developer.

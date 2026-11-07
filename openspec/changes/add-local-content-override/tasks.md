@@ -7,7 +7,7 @@
 
 ## 2. Local content resolution
 
-- [ ] 2.1 Write the failing unit tests for `LocalContent` (`@TempDir`): both files present selects the directory, one file missing fails naming it, directory name differs from `release.project` fails, undeclared directory is reported as ignored and does not fail under forbid, forbid lists served projects, no directory keeps the JAR, non-`X.Y.Z-SNAPSHOT` snapshot version fails
+- [ ] 2.1 Write the failing unit tests for `LocalContent` (`@TempDir`): both files present selects the directory, one file missing fails naming it, directory name differs from `release.project` fails, undeclared directory is reported as ignored and does not fail under forbid, forbid lists served projects, no directory keeps the JAR, a version that is neither `X.Y.Z` nor `X.Y.Z-SNAPSHOT` fails
 - [ ] 2.2 Implement `LocalContent` without Gradle types and reuse `ContentReader` for validation
 
 ## 3. Plugin wiring
