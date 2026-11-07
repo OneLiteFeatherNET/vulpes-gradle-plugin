@@ -6,8 +6,8 @@ import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import net.onelitefeather.vulpes.codegen.Template;
-import net.onelitefeather.vulpes.codegen.Templates;
+import net.onelitefeather.vulpes.codegen.internal.Template;
+import net.onelitefeather.vulpes.codegen.internal.Templates;
 import org.gradle.api.GradleException;
 
 /**
