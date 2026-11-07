@@ -6,6 +6,7 @@ import static net.onelitefeather.vulpes.format.TestFixtures.sha256Hex;
 import static net.onelitefeather.vulpes.format.TestFixtures.tree;
 import static net.onelitefeather.vulpes.format.TestFixtures.write;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -138,6 +139,29 @@ final class ContentReaderTest {
     }
 
     @Test
+    void readsLocalSnapshotWithoutCrossEntryChecks() {
+        ObjectNode snapshot = (ObjectNode) tree(bytes(SNAPSHOT_FIXTURE));
+        ((ObjectNode) snapshot.get("expressions").get(0)).put("name", "armorDamage");
+        byte[] snapshotBytes = write(snapshot);
+
+        ContentRelease content = ContentReader.readWithoutCrossEntryChecks(SOURCE, releaseFor(snapshotBytes),
+                snapshotBytes);
+
+        assertEquals("armorDamage", content.snapshot().expressions().get(0).name());
+    }
+
+    @Test
+    void rejectsUnsupportedFormatWithoutCrossEntryChecks() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("format", 3);
+
+        ContentFormatException e = assertThrows(ContentFormatException.class, () -> ContentReader
+                .readWithoutCrossEntryChecks(SOURCE, write(release), bytes(SNAPSHOT_FIXTURE)));
+
+        assertMessageContains(e, "unsupported format 3");
+    }
+
+    @Test
     void readsAssetsWithNullableTextureResolution() {
         List<Asset> assets = readFixturePair().snapshot().assets();
 
@@ -169,14 +193,81 @@ final class ContentReaderTest {
     }
 
     @Test
-    void rejectsUnknownReleaseFormat() {
+    void readsFormat1WithoutBaseAsNoBase() {
+        Release release = readFixturePair().release();
+
+        assertNull(release.base(), "format 1 has no base record");
+    }
+
+    @Test
+    void readsFormat2WithoutBaseAsNoBase() {
+        ObjectNode release = formatTwoRelease();
+
+        assertNull(readRelease(release).release().base(), "format 2 may omit base");
+    }
+
+    @Test
+    void readsFormat2WithBaseRecord() {
+        ObjectNode release = formatTwoRelease();
+        putBase(release, FULL_SHA);
+
+        Release.Base base = readRelease(release).release().base();
+
+        assertEquals(new Release.Base("https://github.com/OneLiteFeatherNET/vulpes-base", "main", FULL_SHA), base,
+                "base record of format 2");
+    }
+
+    @Test
+    void rejectsBaseInFormat1() {
         ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
-        release.put("format", 2);
+        putBase(release, FULL_SHA);
+
+        ContentFormatException e = assertThrows(ContentFormatException.class,
+                () -> readRelease(release));
+
+        assertMessageContains(e, SOURCE + ": release.json: $.base", "unknown property");
+    }
+
+    @Test
+    void rejectsUnknownFieldInBase() {
+        ObjectNode release = formatTwoRelease();
+        putBase(release, FULL_SHA);
+        ((ObjectNode) release.get("base")).put("tag", "v1");
+
+        ContentFormatException e = assertThrows(ContentFormatException.class, () -> readRelease(release));
+
+        assertMessageContains(e, SOURCE + ": release.json: $.base.tag", "unknown property");
+    }
+
+    @Test
+    void rejectsShortBaseCommit() {
+        ObjectNode release = formatTwoRelease();
+        putBase(release, "0123abc");
+
+        ContentFormatException e = assertThrows(ContentFormatException.class, () -> readRelease(release));
+
+        assertMessageContains(e, SOURCE + ": release.json: $.base.commit", "40-character");
+    }
+
+    @Test
+    void rejectsUpperCaseBaseCommit() {
+        ObjectNode release = formatTwoRelease();
+        putBase(release, FULL_SHA.toUpperCase(java.util.Locale.ROOT));
+
+        ContentFormatException e = assertThrows(ContentFormatException.class, () -> readRelease(release));
+
+        assertMessageContains(e, SOURCE + ": release.json: $.base.commit", "40-character");
+    }
+
+    @Test
+    void rejectsUnsupportedReleaseFormatAndNamesSupportedFormats() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("format", 3);
 
         ContentFormatException e = assertThrows(ContentFormatException.class,
                 () -> ContentReader.read(SOURCE, write(release), bytes(SNAPSHOT_FIXTURE)));
 
-        assertMessageContains(e, "release.json", "2", "supported: 1");
+        assertMessageContains(e, "release.json", "3", "supported: 1, 2");
     }
 
     @Test
@@ -271,6 +362,25 @@ final class ContentReaderTest {
         ContentFormatException e = assertThrows(ContentFormatException.class, () -> ContentReader.read(jar));
 
         assertMessageContains(e, SOURCE + ": missing META-INF/vulpes/snapshot.json");
+    }
+
+    private static final String FULL_SHA = "0123456789abcdef0123456789abcdef01234567";
+
+    private static ObjectNode formatTwoRelease() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("format", 2);
+        return release;
+    }
+
+    private static void putBase(ObjectNode release, String commit) {
+        ObjectNode base = release.putObject("base");
+        base.put("repository", "https://github.com/OneLiteFeatherNET/vulpes-base");
+        base.put("branch", "main");
+        base.put("commit", commit);
+    }
+
+    private static ContentRelease readRelease(ObjectNode release) {
+        return ContentReader.read(SOURCE, write(release), bytes(SNAPSHOT_FIXTURE));
     }
 
     private static ContentRelease readFixturePair() {

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onelitefeather.net/schemas/vulpes/release-2.json",
+  "title": "Vulpes release descriptor (META-INF/vulpes/release.json), format 2",
+  "description": "Describes one immutable content release. Format 1 plus the optional base record. Serialized as UTF-8 with sorted object keys and no insignificant whitespace. packs[].id is unique.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "project",
+    "projectId",
+    "version",
+    "revision",
+    "packs",
+    "provenance"
+  ],
+  "properties": {
+    "format": {
+      "description": "Format version of release.json. Consumers reject unknown values.",
+      "const": 2
+    },
+    "project": {
+      "description": "Project name, equal to the Maven artifactId under net.onelitefeather.vulpes.content.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "projectId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version": {
+      "description": "Maven version of the data JAR: X.Y.Z for a release, X.Y.Z-SNAPSHOT for a snapshot.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-SNAPSHOT)?$"
+    },
+    "revision": {
+      "description": "sha256 over the exact bytes of META-INF/vulpes/snapshot.json.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "base": {
+      "description": "Optional. The vulpes-base source the release was generated with. Informational: consumers print it and do not compare it with a pinned version.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "branch",
+        "commit"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "format": "uri"
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commit": {
+          "description": "Full 40-character lower-case hexadecimal SHA-1 of the commit.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "packs": {
+      "description": "Resource packs of this release, sorted by id. Empty while packs are not built yet.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pack"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generator",
+        "createdBy",
+        "createdAt"
+      ],
+      "properties": {
+        "generator": {
+          "description": "Version of vulpes-generator that built the release.",
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "createdAt": {
+          "description": "Time the release was frozen in the backend (UTC), not the generator's clock.",
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "resolution",
+        "url",
+        "sha1",
+        "size"
+      ],
+      "properties": {
+        "id": {
+          "description": "Stable variant id, unique within packs; becomes a constant name such as PACK_16X.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "resolution": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha1": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "size": {
+          "description": "Pack size in bytes.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

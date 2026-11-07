@@ -48,6 +48,41 @@ final class ContractTest {
     }
 
     @Test
+    void formatTwoReleaseWithBaseMatchesReleaseSchemaTwo() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("format", 2);
+        ObjectNode base = release.putObject("base");
+        base.put("repository", "https://github.com/OneLiteFeatherNET/vulpes-base");
+        base.put("branch", "main");
+        base.put("commit", "0123456789abcdef0123456789abcdef01234567");
+
+        assertEquals(List.of(), violations("release-2.schema.json", release.toString()),
+                "format 2 with base must validate against release-2.schema.json");
+    }
+
+    @Test
+    void formatOneReleaseWithBaseIsRejectedBySchemaOne() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.putObject("base").put("branch", "main");
+
+        List<String> violations = violations("release-1.schema.json", release.toString());
+
+        assertEquals(1, violations.size(), "base must be rejected by format 1: " + violations);
+    }
+
+    @Test
+    void formatTwoReleaseWithShortCommitIsRejectedBySchemaTwo() {
+        ObjectNode release = (ObjectNode) tree(bytes(RELEASE_FIXTURE));
+        release.put("format", 2);
+        release.putObject("base").put("commit", "0123abc");
+
+        List<String> violations = violations("release-2.schema.json", release.toString());
+
+        assertTrue(violations.stream().anyMatch(v -> v.startsWith("/base/commit")),
+                "a short commit must be rejected at /base/commit: " + violations);
+    }
+
+    @Test
     void releaseRevisionIsSha256OfSnapshotBytes() {
         String revision = tree(bytes(RELEASE_FIXTURE)).get("revision").asText();
         assertEquals("sha256:" + sha256Hex(bytes(SNAPSHOT_FIXTURE)), revision,
