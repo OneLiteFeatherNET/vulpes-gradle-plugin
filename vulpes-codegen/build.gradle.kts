@@ -11,6 +11,7 @@ dependencies {
     testImplementation(libs.vulpes.base)
     testImplementation(libs.minestom)
     testImplementation(libs.adventure.key)
+    testImplementation(gradleTestKit())
 }
 
 // minestom is built for Java 25: the tests compile and run on JDK 25 against a Java 25 classpath.
