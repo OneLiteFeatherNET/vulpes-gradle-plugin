@@ -12,7 +12,7 @@ A declared project with a local directory `<projectDir>/<localContentDirectory>/
 Alternative considered: decide the selection at configuration time with `File.exists`. Rejected: the configuration cache would not notice a directory that appears or disappears, and the task inputs would have to be recomputed anyway.
 
 ### Merge by stable id
-In the lists items, attributes, fonts, sounds, advancements and expressionFunctions an entry is matched by its stable `id`. Assets are matched by `path`. The rules are the same for every list:
+In the lists items, attributes, fonts, sounds, advancements, expressions and expressionFunctions an entry is matched by its stable `id`, which is a UUID. Assets are matched by `path`. The rules are the same for every list:
 
 - A local entry whose id exists in the published snapshot replaces that entry completely. The published entry is dropped, not merged field by field.
 - A local entry with an id that does not exist in the published snapshot is added.
@@ -33,18 +33,21 @@ The revision check of the local files stays as it is: the local `release.json` r
 An entry that is missing from the local snapshot stays in the merged result. The local snapshot cannot tell "deleted" from "not part of the experiment", so a missing entry is never treated as a deletion. Supporting deletion would need a tombstone record in the format, which is a format change and is not part of this change.
 
 ### Consistency after the merge
-The merged snapshot passes the same checks as a single snapshot:
+The local files alone get only the format checks: the format reader, the supported format number, the `revision` against `snapshot.json`, the `release.project` against the directory name, and the version form. They get no cross-entry checks. A local snapshot holds only the entries under test, so it may legitimately refer to published entries: an advancement `parent` key, or a font symbol `file` whose asset exists only in the published snapshot.
+
+All cross-entry checks run once, on the merged snapshot, with the same rules as a single snapshot:
 
 - ids are unique across the snapshot;
 - key or name is unique within each list;
+- a name is unique across `expressions` and `expressionFunctions`;
 - a previous key or name never equals a current one in the same list;
 - asset paths are unique;
 - every used resource location has an asset;
-- advancement parents form a forest without cycles and point to existing advancements.
+- advancement parents, which are keys, name an existing advancement, and the advancements form a forest without cycles.
 
-A failing check fails the build. The message names the project, the conflicting entries, and the side each entry comes from (local or published). Example: the local snapshot adds item id `X` with key `cygnus:iron_sword`, while the published item `Y` keeps `cygnus:iron_sword`. The build fails and names `X` (local), `Y` (published) and the shared key.
+A failing check fails the build. The message names the project, the conflicting entries, and the side each entry comes from (local or published). Example: the local snapshot adds item id `00000000-0000-0000-0000-0000000000a1` with key `cygnus:iron_sword`, while the published item `00000000-0000-0000-0000-0000000000b2` keeps `cygnus:iron_sword`. The build fails and names both ids, the shared key, and the side of each.
 
-The checks run on the merged snapshot. A local snapshot that is valid on its own can still fail after the merge, and that is the case the checks are for.
+A local snapshot that is valid on its own can still fail after the merge, and that is the case the merged checks are for. The reverse also holds: a reference from a local entry to a published entry is valid, because the merged snapshot holds that entry.
 
 ### Task inputs
 `vulpesGenerate` and `vulpesDiff` receive the whole local content directory tree as `@InputFiles` with `@PathSensitive(RELATIVE)`, filtered to the two file names. An added, changed or deleted file therefore changes the inputs. The data JARs stay `@Classpath`, because the published snapshot is still read from them. No existence check happens during configuration, so the configuration cache stays valid when directories come and go.
@@ -90,7 +93,7 @@ A merged project still resolves its Maven artifact, because the merge needs the 
 ## Risks
 
 - A forgotten local directory silently changes which content a release build uses. Mitigation: the notice on every build, and `-Pvulpes.local.forbid=true` in CI.
-- A local entry can replace a published entry that other entries still refer to by key. Mitigation: the consistency checks above; references between entries other than advancement parents are not checked by this change.
+- Keys that appear inside free-form values (item `components`, expression text) are not checked by this change. A local entry can replace a published entry that such a value still refers to by key, and the build does not notice.
 - The generator writes format 2 before a plugin that reads it is released, and older plugins fail on every build. Mitigation: the ordering constraint above, stated in the release notes of this change.
 
 ## Open questions
