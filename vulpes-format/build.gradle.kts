@@ -4,8 +4,8 @@ plugins {
 }
 
 dependencies {
-    implementation(platform(libs.jackson.bom))
-    implementation(libs.jackson.databind)
+    // A pinned version instead of the BOM: the POM must carry the resolved version and no BOM import.
+    implementation("com.fasterxml.jackson.core:jackson-databind:${libs.versions.jackson.get()}")
 
     compileOnly(libs.jetbrains.annotations)
 

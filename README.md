@@ -107,6 +107,38 @@ configurations.named("vulpesData") {
 
 The task compares the current content with the given version and writes a Markdown and a JSON report per content project to `build/reports/vulpes/diff/`. `vulpes.diff.project` limits the comparison to one content project.
 
+## Using the code generator as a library
+
+The generator is published as two Maven artifacts with the plugin's version, released together with it:
+
+```kotlin
+dependencies {
+    implementation("net.onelitefeather.vulpes:vulpes-codegen:<version>")
+}
+```
+
+`vulpes-codegen` brings `vulpes-format` (the reader of content releases) as a compile dependency. JavaPoet and EvalEx are runtime dependencies. Test libraries are not published.
+
+The entry point is `net.onelitefeather.vulpes.codegen.VulpesCodegen`. It takes a content release, read by `vulpes-format` with `ContentReader.read(source, releaseJson, snapshotJson)`, and the options: the package of the generated classes and a template, `minestom` or `keys`.
+
+```java
+ContentRelease content = ContentReader.read("cygnus", releaseJson, snapshotJson);
+CodegenOptions options = new CodegenOptions("net.example.content.cygnus", CodegenTemplate.MINESTOM);
+
+List<GeneratedSource> sources = VulpesCodegen.generate(content, options);
+VulpesCodegen.write(content, options, outputDirectory);
+```
+
+`generate` returns the sources in memory. `write` creates the files in package layout below the directory and nothing else; clear the directory first if old files must go. Generation fails with `CodegenException`, which names the project, for example for a font in the reserved namespace `space`.
+
+The output is the same as the plugin's output for the same release, package and template.
+
+### Compatibility
+
+Semantic versioning covers `VulpesCodegen`, `CodegenOptions`, the names of `CodegenTemplate`, `GeneratedSource`, `Dependency`, `CodegenException` and the `vulpes-format` types in their signatures. Everything else in `vulpes-codegen` is internal (`net.onelitefeather.vulpes.codegen.internal`) and may change in any release. A breaking change of a covered type is marked with `!` and a `BREAKING CHANGE:` footer.
+
+Generated code is not covered by semantic versioning. A release that changes the code generated for a template names that template in the changelog.
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.

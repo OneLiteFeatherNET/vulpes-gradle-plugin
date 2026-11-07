@@ -11,9 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import net.onelitefeather.vulpes.codegen.CodegenException;
+import net.onelitefeather.vulpes.codegen.CodegenOptions;
+import net.onelitefeather.vulpes.codegen.CodegenTemplate;
 import net.onelitefeather.vulpes.codegen.GeneratedSource;
-import net.onelitefeather.vulpes.codegen.Template;
-import net.onelitefeather.vulpes.codegen.Templates;
+import net.onelitefeather.vulpes.codegen.VulpesCodegen;
 import net.onelitefeather.vulpes.format.ContentRelease;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -68,7 +69,7 @@ public abstract class VulpesGenerateTask extends DefaultTask {
         Path output = getOutputDirectory().get().getAsFile().toPath();
         clear(output);
 
-        Template template = VulpesTemplates.select(getTemplate().get());
+        CodegenTemplate template = VulpesTemplates.select(getTemplate().get());
         List<ContentRelease> releases = DataJarReader.read(getDataJars(), getArtifactIdsByFileName().get());
         List<String> projects = new ArrayList<>();
         releases.forEach(content -> projects.add(content.release().project()));
@@ -83,8 +84,8 @@ public abstract class VulpesGenerateTask extends DefaultTask {
             String project = content.release().project();
             List<GeneratedSource> sources;
             try {
-                sources = Templates.generate(template, content, packages.get(project));
-            } catch (CodegenException e) {
+                sources = VulpesCodegen.generate(content, new CodegenOptions(packages.get(project), template));
+            } catch (CodegenException | IllegalArgumentException e) {
                 throw new GradleException(e.getMessage(), e);
             }
             for (GeneratedSource source : sources) {

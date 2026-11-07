@@ -1,5 +1,4 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.gradle.language.jvm.tasks.ProcessResources
 
 plugins {
     `java-gradle-plugin`
@@ -41,19 +40,6 @@ tasks.withType<Jar>().configureEach {
     }
 }
 
-// Library versions the plugin was built and tested with, read at runtime to pick the runtime dependencies of a template.
-val versionsFile = tasks.register<WriteProperties>("writeVersions") {
-    destinationFile = layout.buildDirectory.file("generated/vulpes/versions.properties")
-    property("vulpes-base", libs.versions.vulpes.base.get())
-    property("adventure-key", libs.versions.adventure.key.get())
-}
-
-tasks.named<ProcessResources>("processResources") {
-    from(versionsFile) {
-        into("net/onelitefeather/vulpes/gradle")
-    }
-}
-
 tasks.named<Jar>("jar") {
     archiveClassifier = "plain"
 }
@@ -79,6 +65,7 @@ testing {
                 implementation(platform(libs.jackson.bom))
                 implementation(libs.jackson.databind)
                 implementation(gradleTestKit())
+                implementation(project(":vulpes-codegen"))
             }
         }
     }

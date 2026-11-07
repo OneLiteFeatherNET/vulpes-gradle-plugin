@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import net.onelitefeather.vulpes.codegen.JavaNames;
+import net.onelitefeather.vulpes.codegen.internal.JavaNames;
 
 /**
  * Decides the Java package of each content project.
