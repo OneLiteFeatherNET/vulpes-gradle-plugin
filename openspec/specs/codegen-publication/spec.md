@@ -1,7 +1,7 @@
 # codegen-publication Specification
 
 ## Purpose
-TBD - created by archiving change publish-codegen-library. Update Purpose after archive.
+Defines which Maven artifacts the code generator is published as (`vulpes-format` and `vulpes-codegen`), their coordinates, versions, POM dependency scopes and their release together with the Gradle plugin.
 
 ## Requirements
 

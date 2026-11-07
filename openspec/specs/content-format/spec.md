@@ -1,7 +1,7 @@
 # content-format Specification
 
 ## Purpose
-Defines the data JAR of a Vulpes content release (format 1) and how a consumer reads it into a validated model.
+Defines the data JAR of a Vulpes content release (`release.json` format 1 and 2, `snapshot.json` format 1) and how a consumer reads it into a validated model.
 
 ## Requirements
 

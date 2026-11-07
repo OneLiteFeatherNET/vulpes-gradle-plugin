@@ -1,7 +1,7 @@
 # codegen-api Specification
 
 ## Purpose
-TBD - created by archiving change publish-codegen-library. Update Purpose after archive.
+Defines the public entry point of the code generator library `vulpes-codegen`, which turns a content release into Java sources in memory or on disk, and the compatibility promise that covers it.
 
 ## Requirements
 
