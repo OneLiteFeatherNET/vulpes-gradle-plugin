@@ -56,7 +56,7 @@ vulpes {
 
 Each content project in the `vulpes` configuration generates sources into `build/generated/sources/vulpes/java/main` before `compileJava` runs.
 
-- `minestom` (default) generates the full content: entries, the content object, resource packs and formulas. It needs vulpes-base, which the plugin adds as a runtime dependency.
+- `minestom` (default) generates the full content: entries, the content object, resource packs and formulas. It needs vulpes-base, which the plugin adds as a runtime dependency. vulpes-base does not bring Minestom or the Adventure API, so the game must have both on its compile classpath itself, as every Minestom game already does.
 - `keys` generates the key constants and the expression function interface only. It needs adventure-key and no server.
 
 With several content projects, set the package per project with `vulpes { project("cygnus") { packageName = "..." } }`. `vulpes.packageName` is only allowed for a single content project.
