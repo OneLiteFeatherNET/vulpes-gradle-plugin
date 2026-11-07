@@ -16,7 +16,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import net.kyori.adventure.key.Key;
+import net.onelitefeather.vulpes.codegen.CodegenOptions;
+import net.onelitefeather.vulpes.codegen.CodegenTemplate;
+import net.onelitefeather.vulpes.codegen.GeneratedSource;
+import net.onelitefeather.vulpes.codegen.VulpesCodegen;
+import net.onelitefeather.vulpes.format.ContentReader;
+import net.onelitefeather.vulpes.format.ContentRelease;
 import net.onelitefeather.vulpes.format.fixtures.DataJarFixtures;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.BuildTask;
@@ -42,6 +51,7 @@ final class VulpesPluginFunctionalTest {
     private static final String DEPENDENCY = "dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }";
     /** The compile tests generate the keys only, so that they need adventure-key and not vulpes-base. */
     private static final String KEYS_TEMPLATE = "vulpes { template = \"keys\" }";
+    private static final String CYGNUS_PACKAGE = "net.onelitefeather.vulpes.content.cygnus";
 
     @Test
     void generatesReleaseClassSourceForDataJar(@TempDir Path dir) throws IOException {
@@ -404,6 +414,52 @@ final class VulpesPluginFunctionalTest {
 
         assertFalse(Files.exists(workspace.file(CYGNUS_CONTENT)), "the keys template generates no CygnusContent");
         assertTrue(Files.isRegularFile(workspace.file(CYGNUS_ITEM_KEYS)), "the keys template generates the key classes");
+    }
+
+    @Test
+    void minestomOutputIsIdenticalToTheLibraryOutput(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY);
+        workspace.runner("vulpesGenerate").build();
+
+        assertSameAsLibrary(workspace, CodegenTemplate.MINESTOM);
+    }
+
+    @Test
+    void keysOutputIsIdenticalToTheLibraryOutput(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+
+        assertSameAsLibrary(workspace, CodegenTemplate.KEYS);
+    }
+
+    /** Generates the same release with the library and compares the files: same names and same bytes. */
+    private static void assertSameAsLibrary(Workspace workspace, CodegenTemplate template) throws IOException {
+        ContentRelease content = ContentReader.read(CYGNUS, DataJarFixtures.releaseJson(),
+                DataJarFixtures.snapshotJson());
+        List<GeneratedSource> expected = VulpesCodegen.generate(content,
+                new CodegenOptions(CYGNUS_PACKAGE, template));
+        Path generated = workspace.file(GENERATED);
+        Set<String> expectedFiles = expected.stream()
+                .map(source -> CYGNUS_PACKAGE.replace('.', '/') + "/" + source.className() + ".java")
+                .collect(Collectors.toSet());
+        assertEquals(expectedFiles, javaFiles(generated), "files of the plugin and of the library");
+        for (GeneratedSource source : expected) {
+            Path file = generated.resolve(CYGNUS_PACKAGE.replace('.', '/') + "/" + source.className() + ".java");
+            assertEquals(source.source(), Files.readString(file, StandardCharsets.UTF_8),
+                    source.className() + " of the plugin must equal the library output");
+        }
+    }
+
+    private static Set<String> javaFiles(Path directory) throws IOException {
+        try (Stream<Path> files = Files.walk(directory)) {
+            return files.filter(file -> file.toString().endsWith(".java"))
+                    .map(file -> directory.relativize(file).toString().replace('\\', '/'))
+                    .collect(Collectors.toSet());
+        }
     }
 
     @Test

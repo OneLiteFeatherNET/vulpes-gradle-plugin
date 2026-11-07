@@ -3,6 +3,7 @@ package net.onelitefeather.vulpes.gradle;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
+import net.onelitefeather.vulpes.codegen.VulpesCodegen;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -102,8 +103,8 @@ public class VulpesPlugin implements Plugin<Project> {
             // The runtime library of the selected template, resolved lazily so that the template can be set later.
             DependencyHandler dependencies = project.getDependencies();
             Configuration implementation = project.getConfigurations().getByName(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME);
-            implementation.getDependencies().addAllLater(extension.getTemplate().map(name -> VulpesTemplates.select(name)
-                    .runtimeDependencies().stream()
+            implementation.getDependencies().addAllLater(extension.getTemplate().map(name -> VulpesCodegen
+                    .runtimeDependencies(VulpesTemplates.select(name)).stream()
                     .map(dependency -> dependencies.create(dependency.group() + ":" + dependency.name() + ":"
                             + dependency.version()))
                     .toList()));
