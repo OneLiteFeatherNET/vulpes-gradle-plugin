@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.2.0...v0.3.0) (2026-11-07)
+
+
+### Features
+
+* **codegen:** generate space font constants for every project ([#20](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/20)) ([d050be2](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/d050be2a0580e78ff2ec1ea25bb852594545af49))
+* **codegen:** publish the code generator as a library ([#28](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/28)) ([38ea039](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/38ea03967a413621b6541f5cbee2c1a8fe88c6f1))
+* **codegen:** reject project functions named like built-in ones ([#16](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/16)) ([0ad8333](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/0ad8333af427fa3a67909a33507cd5be5ec7b1c4))
+* **plugin:** merge local content over published data jars ([#25](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/25)) ([db72117](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/db7211708951c147d1ee9645f32341c904357733))
+
 ## [0.2.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.1.0...v0.2.0) (2026-10-30)
 
 
