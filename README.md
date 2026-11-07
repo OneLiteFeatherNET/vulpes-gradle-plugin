@@ -139,6 +139,40 @@ Semantic versioning covers `VulpesCodegen`, `CodegenOptions`, the names of `Code
 
 Generated code is not covered by semantic versioning. A release that changes the code generated for a template names that template in the changelog.
 
+## Testing content locally
+
+A local build of content, such as the ZIP that Stelaris offers as a "local build" download before a release is published, can be tested without publishing it. Unzip it into the game's project root, so that the project holds these files:
+
+```
+game/
+└── vulpes/
+    └── cygnus/
+        ├── release.json
+        └── snapshot.json
+```
+
+The local entries are merged over the published data JAR of the same declared project, so a build with a few changed or new entries does not need a copy of the whole published content:
+
+- Entries are matched by their stable `id`; assets are matched by `path`. A local entry whose id exists in the published content replaces that entry as a whole. A local entry with a new id is added. Published entries without a local counterpart are kept.
+- A rename keeps the id: the local entry with the new key replaces the published one, and the old key is gone from the build.
+- Entries cannot be deleted. An entry that the local snapshot does not contain stays in the build.
+- `projectId` and `namespace` must equal the published ones. The pack and the release (version, revision and base) come from the local files.
+- The rules that relate entries to each other (unique ids and keys, previous keys, asset paths, expression names, advancement parents) are checked on the merged content. A failure names both entries and whether each one comes from the local or the published side.
+
+The Maven artifact is still resolved, because the merge needs the published content, so the repository credentials are still needed. Remove the directory to build from the published content alone. Add `/vulpes/` to `.gitignore`, so that local files are not committed.
+
+Every build prints one line per merged project, with the local version, the published version it is merged over, the number of replaced and added entries, and the base branch and commit recorded in `release.json`:
+
+```
+vulpes local content: cygnus 1.4.1-SNAPSHOT is merged over published 1.4.0 from vulpes/cygnus: 3 replaced, 2 added; base ... branch main commit ...
+```
+
+- A directory with only one of the two files fails the build and names the missing file.
+- A directory for a project that no `vulpes(...)` dependency declares is ignored with a warning. It adds no content.
+- `vulpes { localContentDirectory = "content" }` changes the parent directory, which is relative to the project directory and defaults to `vulpes`.
+- In CI, run with `-Pvulpes.local.forbid=true`. The build then fails when a declared project is merged with a local directory.
+- A `release.json` in format 2 may carry a `base` record with `repository`, `branch` and `commit`. Older plugin versions reject format 2, so the generator writes it only once a plugin release that reads it is available.
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for details.

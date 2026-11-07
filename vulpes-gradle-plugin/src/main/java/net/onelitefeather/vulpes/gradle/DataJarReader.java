@@ -1,10 +1,13 @@
 package net.onelitefeather.vulpes.gradle;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import net.onelitefeather.vulpes.format.ContentFormatException;
 import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
@@ -12,11 +15,84 @@ import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
 
 /**
- * Reads the Vulpes data JARs of a task's classpath, in file name order.
+ * Reads the Vulpes data JARs of a task's classpath, in file name order, and merges the local content over them.
  */
 final class DataJarReader {
 
     private DataJarReader() {
+    }
+
+    /**
+     * The content of the declared projects.
+     *
+     * @param releases one release per declared project, sorted by project name; a project with local content has its
+     *                 merged release
+     * @param overrides the declared projects merged with a local directory, sorted by project name
+     * @param ignored undeclared directories that were ignored, as {@code <root>/<name>}
+     */
+    record Content(List<ContentRelease> releases, List<Override> overrides, List<String> ignored) {
+    }
+
+    /**
+     * A declared project whose published content was merged with its local directory.
+     *
+     * @param project the content project name
+     * @param directory the local directory
+     * @param publishedVersion the version of the published data JAR the local content was merged over
+     * @param merged the merged content and the counts of replaced and added entries
+     */
+    record Override(String project, Path directory, String publishedVersion, ContentMerge.Merged merged) {
+    }
+
+    /**
+     * Reads the content of every declared project. A project with a local directory holding {@code release.json} and
+     * {@code snapshot.json} is merged over its data JAR.
+     *
+     * @param localRoot the local content directory, {@code <projectDir>/<localContentDirectory>}
+     * @param jars the data JARs
+     * @param artifactIds artifact id by data JAR file name
+     * @param mavenVersions Maven version by declared content project
+     * @param forbid whether a merged declared project fails the build
+     * @return the releases, the overrides and the ignored directories
+     * @throws GradleException if local content or a data JAR cannot be used
+     */
+    static Content readAll(Path localRoot, FileCollection jars, Map<String, String> artifactIds,
+                           Map<String, String> mavenVersions, boolean forbid) {
+        LocalContent.Resolution local;
+        try {
+            local = LocalContent.resolve(localRoot, mavenVersions, forbid);
+        } catch (LocalContentException e) {
+            throw new GradleException(e.getMessage(), e);
+        }
+        Map<String, ContentRelease> published = new TreeMap<>();
+        for (ContentRelease content : read(jars, artifactIds)) {
+            published.put(content.release().project(), content);
+        }
+        Set<String> merged = local.servedProjects();
+        List<ContentRelease> releases = new ArrayList<>();
+        published.forEach((project, content) -> {
+            if (!merged.contains(project)) {
+                releases.add(content);
+            }
+        });
+        List<Override> overrides = new ArrayList<>();
+        for (LocalContent.Served served : local.served()) {
+            ContentRelease base = published.get(served.project());
+            if (base == null) {
+                throw new GradleException(served.project() + ": no data JAR of this content project to merge "
+                        + served.directory() + " over");
+            }
+            ContentMerge.Merged result;
+            try {
+                result = ContentMerge.merge(served.project(), base, served.content());
+            } catch (LocalContentException e) {
+                throw new GradleException(e.getMessage(), e);
+            }
+            releases.add(result.content());
+            overrides.add(new Override(served.project(), served.directory(), served.mavenVersion(), result));
+        }
+        releases.sort(Comparator.comparing((ContentRelease content) -> content.release().project()));
+        return new Content(releases, overrides, local.ignored());
     }
 
     /**

@@ -19,8 +19,11 @@ import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Optional;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.UntrackedTask;
 
@@ -37,6 +40,23 @@ public abstract class VulpesDiffTask extends DefaultTask {
     /** Artifact id by data JAR file name of the current versions. */
     @Input
     public abstract MapProperty<String, String> getArtifactIdsByFileName();
+
+    /** The local content directory, {@code <projectDir>/<localContentDirectory>}. */
+    @Internal
+    public abstract DirectoryProperty getLocalContentRoot();
+
+    /** The release and snapshot files of the local content directories, which replace the current data JARs. */
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getLocalContentFiles();
+
+    /** Maven version by declared content project of the current versions. */
+    @Input
+    public abstract MapProperty<String, String> getMavenVersionsByArtifactId();
+
+    /** Whether a local override of a declared content project fails the build, from {@code vulpes.local.forbid}. */
+    @Input
+    public abstract Property<Boolean> getForbid();
 
     /** The Vulpes data JARs of the base version, one per content project. */
     @Classpath
@@ -67,8 +87,9 @@ public abstract class VulpesDiffTask extends DefaultTask {
             throw new GradleException("vulpesDiff needs the version to compare with: "
                     + "run it with -Pvulpes.diff.from=<version>");
         }
-        Map<String, ContentRelease> current =
-                byArtifactId(DataJarReader.read(getDataJars(), getArtifactIdsByFileName().get()));
+        Map<String, ContentRelease> current = byArtifactId(DataJarReader.readAll(
+                getLocalContentRoot().get().getAsFile().toPath(), getDataJars(), getArtifactIdsByFileName().get(),
+                getMavenVersionsByArtifactId().get(), getForbid().get()).releases());
         Map<String, ContentRelease> base =
                 byArtifactId(DataJarReader.read(getBaseDataJars(), getBaseArtifactIdsByFileName().get()));
         String filter = getProjectFilter().getOrNull();

@@ -40,7 +40,7 @@ final class ContentReaderTest {
         assertEquals("cygnus", release.project(), "project");
         assertEquals(UUID.fromString(PROJECT_ID), release.projectId(), "projectId");
         assertEquals("1.4.0", release.version(), "version");
-        assertEquals("sha256:a79f668ed6c27316205f5638b5bfcfc887ec0c28a6fbaac50908771fa5518a51", release.revision(), "revision");
+        assertEquals("sha256:8c18b756a0496c8906be16bc02450b68b97665f664a792ddd8a22d571d046f05", release.revision(), "revision");
         assertEquals(
                 List.of(
                         new Pack("16x", 16,
@@ -287,7 +287,7 @@ final class ContentReaderTest {
         ContentFormatException e = assertThrows(ContentFormatException.class,
                 () -> ContentReader.read(SOURCE, bytes(RELEASE_FIXTURE), snapshot));
 
-        assertMessageContains(e, "sha256:a79f668ed6c27316205f5638b5bfcfc887ec0c28a6fbaac50908771fa5518a51",
+        assertMessageContains(e, "sha256:8c18b756a0496c8906be16bc02450b68b97665f664a792ddd8a22d571d046f05",
                 "sha256:" + sha256Hex(snapshot));
     }
 
