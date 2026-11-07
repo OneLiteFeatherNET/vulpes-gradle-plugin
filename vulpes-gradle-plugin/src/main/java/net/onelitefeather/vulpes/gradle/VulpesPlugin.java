@@ -14,6 +14,8 @@ import org.gradle.api.artifacts.dsl.DependencyHandler;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
 import org.gradle.api.attributes.Category;
 import org.gradle.api.attributes.Usage;
+import org.gradle.api.file.Directory;
+import org.gradle.api.file.FileTree;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
@@ -36,11 +38,15 @@ public class VulpesPlugin implements Plugin<Project> {
     static final String DIFF_FROM_PROPERTY = "vulpes.diff.from";
     static final String DIFF_PROJECT_PROPERTY = "vulpes.diff.project";
     static final String REPORT_DIRECTORY = "reports/vulpes/diff";
+    static final String LOCAL_TASK_NAME = "vulpesLocalContent";
+    static final String LOCAL_FORBID_PROPERTY = "vulpes.local.forbid";
+    static final String DEFAULT_LOCAL_CONTENT_DIRECTORY = "vulpes";
 
     @Override
     public void apply(Project project) {
         VulpesExtension extension = project.getExtensions().create(EXTENSION_NAME, VulpesExtension.class);
         extension.getTemplate().convention(VulpesTemplates.DEFAULT);
+        extension.getLocalContentDirectory().convention(DEFAULT_LOCAL_CONTENT_DIRECTORY);
         Configuration vulpes = project.getConfigurations().dependencyScope(DEPENDENCY_SCOPE).get();
         Configuration vulpesData = project.getConfigurations().resolvable(DATA_CONFIGURATION, data -> {
             data.extendsFrom(vulpes);
@@ -70,12 +76,36 @@ public class VulpesPlugin implements Plugin<Project> {
             dataAttributes(project, base);
         }).get();
 
+        Provider<Directory> localRoot = project.getLayout().getProjectDirectory()
+                .dir(extension.getLocalContentDirectory());
+        Provider<Boolean> localForbid = project.getProviders().gradleProperty(LOCAL_FORBID_PROPERTY)
+                .map(Boolean::parseBoolean).orElse(false);
+        Provider<Map<String, String>> mavenVersions = mavenVersionsByArtifactId(vulpesData);
+        FileTree localFiles = project.fileTree(localRoot,
+                tree -> tree.include("*/" + LocalContent.RELEASE_FILE, "*/" + LocalContent.SNAPSHOT_FILE));
+
+        TaskProvider<VulpesLocalContentTask> localContent = project.getTasks().register(LOCAL_TASK_NAME,
+                VulpesLocalContentTask.class, task -> {
+                    task.setGroup("vulpes");
+                    task.setDescription("Prints the local content that is merged over the published data JARs.");
+                    task.getDataJars().from(vulpesData);
+                    task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+                    task.getLocalContentRoot().set(localRoot);
+                    task.getMavenVersionsByArtifactId().set(mavenVersions);
+                    task.getForbid().set(localForbid);
+                });
+
         TaskProvider<VulpesGenerateTask> generate = project.getTasks().register(TASK_NAME, VulpesGenerateTask.class,
                 task -> {
                     task.setGroup("vulpes");
                     task.setDescription("Generates Java sources from the Vulpes content data JARs.");
+                    task.dependsOn(localContent);
                     task.getDataJars().from(vulpesData);
                     task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+                    task.getLocalContentRoot().set(localRoot);
+                    task.getLocalContentFiles().from(localFiles);
+                    task.getMavenVersionsByArtifactId().set(mavenVersions);
+                    task.getForbid().set(localForbid);
                     task.getTemplate().set(extension.getTemplate());
                     task.getPackageName().set(extension.getPackageName());
                     task.getPackages().set(project.provider(() -> packageOverrides(extension)));
@@ -90,6 +120,10 @@ public class VulpesPlugin implements Plugin<Project> {
             task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
             task.getBaseDataJars().from(vulpesDiffBase);
             task.getBaseArtifactIdsByFileName().set(artifactIdsByFileName(vulpesDiffBase));
+            task.getLocalContentRoot().set(localRoot);
+            task.getLocalContentFiles().from(localFiles);
+            task.getMavenVersionsByArtifactId().set(mavenVersions);
+            task.getForbid().set(localForbid);
             task.getBaseVersion().set(diffFrom);
             task.getProjectFilter().set(diffProject);
             task.getReportDirectory().set(project.getLayout().getBuildDirectory().dir(REPORT_DIRECTORY));
@@ -134,6 +168,18 @@ public class VulpesPlugin implements Plugin<Project> {
                 }
             }
             return artifactIds;
+        });
+    }
+
+    private static Provider<Map<String, String>> mavenVersionsByArtifactId(Configuration vulpesData) {
+        return vulpesData.getIncoming().getArtifacts().getResolvedArtifacts().map(artifacts -> {
+            Map<String, String> versions = new TreeMap<>();
+            for (ResolvedArtifactResult artifact : artifacts) {
+                if (artifact.getId().getComponentIdentifier() instanceof ModuleComponentIdentifier module) {
+                    versions.put(module.getModule(), module.getVersion());
+                }
+            }
+            return versions;
         });
     }
 

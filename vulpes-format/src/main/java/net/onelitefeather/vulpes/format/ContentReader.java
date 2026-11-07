@@ -17,16 +17,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * Reads content data JARs and their {@code META-INF/vulpes} metadata in format 1.
+ * Reads content data JARs and their {@code META-INF/vulpes} metadata. {@code release.json} is read in format 1 or 2,
+ * {@code snapshot.json} in format 1.
  */
 public final class ContentReader {
 
-    /** The only format version this reader understands. */
+    /** The format version of {@code snapshot.json} this reader understands. */
     public static final int SUPPORTED_FORMAT = 1;
+
+    /** The format versions of {@code release.json} this reader understands. */
+    private static final List<Integer> RELEASE_FORMATS = List.of(1, 2);
 
     private static final String RELEASE_FILE = "release.json";
     private static final String SNAPSHOT_FILE = "snapshot.json";
@@ -61,12 +66,26 @@ public final class ContentReader {
      * @throws ContentFormatException if either file does not match format 1 or the revision does not match
      */
     public static ContentRelease read(String source, byte[] releaseJson, byte[] snapshotJson) {
+        ContentRelease content = readWithoutCrossEntryChecks(source, releaseJson, snapshotJson);
+        checkExpressionNames(source, content.snapshot());
+        return content;
+    }
+
+    /**
+     * Reads the two metadata files and checks their format, but not the rules that relate entries to each other
+     * (expression names). A local snapshot may refer to entries that only a merged snapshot holds, so its caller runs
+     * those checks on the merged result.
+     *
+     * @param source name of the origin, used in error messages (e.g. the JAR file name)
+     * @throws ContentFormatException if either file does not match its format or the revision does not match
+     */
+    public static ContentRelease readWithoutCrossEntryChecks(String source, byte[] releaseJson, byte[] snapshotJson) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(releaseJson, "releaseJson");
         Objects.requireNonNull(snapshotJson, "snapshotJson");
 
         ObjectNode releaseNode = parse(source, RELEASE_FILE, releaseJson);
-        checkFormat(source, RELEASE_FILE, releaseNode);
+        checkFormat(source, RELEASE_FILE, releaseNode, RELEASE_FORMATS);
         Release release = map(source, RELEASE_FILE, releaseNode, ContentReader::release);
 
         String actual = "sha256:" + sha256Hex(snapshotJson);
@@ -76,9 +95,8 @@ public final class ContentReader {
         }
 
         ObjectNode snapshotNode = parse(source, SNAPSHOT_FILE, snapshotJson);
-        checkFormat(source, SNAPSHOT_FILE, snapshotNode);
+        checkFormat(source, SNAPSHOT_FILE, snapshotNode, List.of(SUPPORTED_FORMAT));
         Snapshot snapshot = map(source, SNAPSHOT_FILE, snapshotNode, ContentReader::snapshot);
-        checkExpressionNames(source, snapshot);
         return new ContentRelease(release, snapshot);
     }
 
@@ -107,12 +125,12 @@ public final class ContentReader {
         return object;
     }
 
-    private static void checkFormat(String source, String file, ObjectNode root) {
+    private static void checkFormat(String source, String file, ObjectNode root, List<Integer> supported) {
         JsonNode format = root.get("format");
         if (format != null && format.isIntegralNumber() && format.canConvertToInt()
-                && format.intValue() != SUPPORTED_FORMAT) {
+                && !supported.contains(format.intValue())) {
             throw new ContentFormatException(source + ": " + file + ": unsupported format " + format.intValue()
-                    + ", supported: " + SUPPORTED_FORMAT);
+                    + ", supported: " + supported.stream().map(String::valueOf).collect(Collectors.joining(", ")));
         }
     }
 
@@ -133,7 +151,13 @@ public final class ContentReader {
                 p.string("url"), p.string("sha1"), p.longValue("size")));
         Provenance provenance = o.object("provenance", p -> new Provenance(p.string("generator"),
                 p.string("createdBy"), p.instant("createdAt")));
-        return new Release(format, project, projectId, version, revision, packs, provenance);
+        // Format 1 stays strict: a base record is left unread, so JsonObject.finish() rejects it as unknown.
+        Release.Base base = format == 1 ? null : o.optionalObject("base", ContentReader::base);
+        return new Release(format, project, projectId, version, revision, packs, provenance, base);
+    }
+
+    private static Release.Base base(JsonObject o) {
+        return new Release.Base(o.string("repository"), o.string("branch"), o.commitSha("commit"));
     }
 
     private static Snapshot snapshot(JsonObject o) {

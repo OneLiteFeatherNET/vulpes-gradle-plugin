@@ -15,9 +15,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 import net.kyori.adventure.key.Key;
 import net.onelitefeather.vulpes.codegen.CodegenOptions;
@@ -41,7 +43,6 @@ final class VulpesPluginFunctionalTest {
     private static final String GENERATED = "build/generated/sources/vulpes/java/main/";
     private static final String CYGNUS_SOURCE = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusRelease.java";
     private static final String CYGNUS_CLASS = "build/classes/java/main/net/onelitefeather/vulpes/content/cygnus/CygnusRelease.class";
-    private static final String MANIS = "manis";
     private static final String DIFF_REPORTS = "build/reports/vulpes/diff/";
     private static final String CYGNUS_DIFF_MARKDOWN = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.md";
     private static final String CYGNUS_DIFF_JSON = DIFF_REPORTS + "cygnus-1.4.0-1.5.0.json";
@@ -49,6 +50,12 @@ final class VulpesPluginFunctionalTest {
     private static final String CYGNUS_CONTENT = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusContent.java";
     private static final String CYGNUS_ITEM_KEYS = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusItemKeys.java";
     private static final String DEPENDENCY = "dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }";
+    private static final String MANIS = "manis";
+    private static final String APPLE_ID = "00000000-0000-0000-0000-0000000000a1";
+    private static final String IRON_ID = "12f6f240-843f-5833-8fba-a8ffbe31c173";
+    /** The local snapshot copies every published entry, which counts as replacing it, and adds one item. */
+    private static final String REPLACED_AND_ADDED = "14 replaced, 1 added";
+    private static final String BASE_COMMIT = "0123456789abcdef0123456789abcdef01234567";
     /** The compile tests generate the keys only, so that they need adventure-key and not vulpes-base. */
     private static final String KEYS_TEMPLATE = "vulpes { template = \"keys\" }";
     private static final String CYGNUS_PACKAGE = "net.onelitefeather.vulpes.content.cygnus";
@@ -131,13 +138,13 @@ final class VulpesPluginFunctionalTest {
     void failsForUnsupportedReleaseFormat(@TempDir Path dir) throws IOException {
         Workspace workspace = new Workspace(dir);
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(),
-                release -> release.put("format", 2)));
+                release -> release.put("format", 3)));
         workspace.build("dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }");
 
         BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
 
-        assertTrue(result.getOutput().contains("release.json: unsupported format 2, supported: 1"),
-                "message must name release.json, the format 2 and the supported format 1:\n" + result.getOutput());
+        assertTrue(result.getOutput().contains("release.json: unsupported format 3, supported: 1, 2"),
+                "message must name release.json, the format 3 and the supported formats 1 and 2:\n" + result.getOutput());
     }
 
     @Test
@@ -364,6 +371,256 @@ final class VulpesPluginFunctionalTest {
                 "second run must reuse the configuration cache:\n" + result.getOutput());
     }
 
+    @Test
+    void localDirectoryIsMergedOverDataJar(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        workspace.runner("vulpesGenerate").build();
+
+        assertTrue(Files.readString(workspace.file(CYGNUS_SOURCE)).contains("VERSION = \"1.4.1-SNAPSHOT\""),
+                "the generated code must come from the local release, not from the data JAR 1.4.0");
+    }
+
+    @Test
+    void customLocalContentDirectoryIsUsed(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocalIn("content", CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE + "\nvulpes { localContentDirectory = \"content\" }");
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertTrue(Files.readString(workspace.file(CYGNUS_SOURCE)).contains("VERSION = \"1.4.1-SNAPSHOT\""),
+                "the local files of content/cygnus must be used:\n" + result.getOutput());
+    }
+
+    @Test
+    void failsNamingPartialLocalDirectory(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeReleaseOnly(CYGNUS, localRelease("1.4.1-SNAPSHOT", null));
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("vulpes/cygnus: missing snapshot.json"),
+                "message must name the directory and the missing file:\n" + result.getOutput());
+    }
+
+    @Test
+    void undeclaredLocalDirectoryWarnsAndAddsNoContent(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(MANIS, manisRelease(), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertTrue(result.getOutput().contains("vulpes/manis"), "warning must name the undeclared directory:\n"
+                + result.getOutput());
+        assertFalse(Files.exists(workspace.file(GENERATED + "net/onelitefeather/vulpes/content/manis")),
+                "an undeclared directory must not generate code");
+    }
+
+    @Test
+    void noticeNamesLocalVersionReplacedVersionAndBase(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", BASE_COMMIT), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        String output = result.getOutput();
+        assertTrue(output.contains("cygnus") && output.contains("1.4.1-SNAPSHOT") && output.contains("1.4.0")
+                        && output.contains("main") && output.contains(BASE_COMMIT),
+                "notice must name the project, local version, replaced version, base branch and commit:\n" + output);
+    }
+
+    @Test
+    void noticeIsPrintedWhenGenerationIsUpToDate(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "precondition: up to date");
+        assertTrue(result.getOutput().contains("1.4.1-SNAPSHOT"), "the notice must print on every build:\n" + result.getOutput());
+    }
+
+    @Test
+    void forbidFailsNamingServedProject(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("-Pvulpes.local.forbid=true", "vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("vulpes.local.forbid=true") && result.getOutput().contains("cygnus"),
+                "message must name the forbidden override and the project:\n" + result.getOutput());
+    }
+
+    @Test
+    void forbidSucceedsWithUndeclaredLocalDirectory(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(MANIS, manisRelease(), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("-Pvulpes.local.forbid=true", "vulpesGenerate").build();
+
+        assertEquals(TaskOutcome.SUCCESS, outcome(result, ":vulpesGenerate"), "undeclared directories do not fail");
+    }
+
+    @Test
+    void changedLocalFileRerunsGeneration(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+        workspace.writeLocal(CYGNUS, localRelease("1.4.2-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertNotEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "a changed local file must rerun");
+        assertTrue(Files.readString(workspace.file(CYGNUS_SOURCE)).contains("VERSION = \"1.4.2-SNAPSHOT\""),
+                "the regenerated code must use the changed local release");
+    }
+
+    @Test
+    void removingLocalDirectorySwitchesBackToDataJar(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+        workspace.deleteLocal(CYGNUS);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertNotEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "removal must rerun generation");
+        assertTrue(Files.readString(workspace.file(CYGNUS_SOURCE)).contains("VERSION = \"1.4.0\""),
+                "without the local directory the data JAR 1.4.0 must be used");
+    }
+
+    @Test
+    void secondRunWithLocalDirectoryReusesConfigurationCache(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("--configuration-cache", "vulpesGenerate").build();
+
+        BuildResult result = workspace.runner("--configuration-cache", "vulpesGenerate").build();
+
+        assertTrue(result.getOutput().contains("Configuration cache entry reused"),
+                "second run must reuse the configuration cache:\n" + result.getOutput());
+    }
+
+    @Test
+    void localEntryWithNewIdIsGeneratedNextToPublishedEntries(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot -> addItem(snapshot, APPLE_ID, "cygnus:apple"));
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        workspace.runner("vulpesGenerate").build();
+
+        String keys = Files.readString(workspace.file(CYGNUS_ITEM_KEYS));
+        assertTrue(keys.contains("APPLE") && keys.contains("IRON_SWORD") && keys.contains("RATION"),
+                "the new item must be generated next to the published items:\n" + keys);
+    }
+
+    @Test
+    void localRenameReplacesPublishedKeyOfSameId(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot ->
+                ((ObjectNode) snapshot.get("items").get(0)).put("key", "cygnus:steel_sword"));
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        workspace.runner("vulpesGenerate").build();
+
+        String keys = Files.readString(workspace.file(CYGNUS_ITEM_KEYS));
+        assertTrue(keys.contains("STEEL_SWORD") && !keys.contains("IRON_SWORD"),
+                "the renamed entry replaces the published key of the same id:\n" + keys);
+    }
+
+    @Test
+    void localSnapshotDoesNotDeletePublishedEntries(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot -> ((ArrayNode) snapshot.get("items")).remove(1));
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        workspace.runner("vulpesGenerate").build();
+
+        assertTrue(Files.readString(workspace.file(CYGNUS_ITEM_KEYS)).contains("RATION"),
+                "an item missing from the local snapshot stays in the build");
+    }
+
+    @Test
+    void failsNamingBothNamespacesOfMergedProject(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot -> snapshot.put("namespace", "manis"));
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("'manis'") && result.getOutput().contains("'cygnus'"),
+                "message must name both namespaces:\n" + result.getOutput());
+    }
+
+    @Test
+    void failsNamingBothEntriesAndSidesOfKeyConflict(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot -> {
+            ObjectNode item = ((ObjectNode) snapshot.get("items").get(1)).deepCopy();
+            item.put("id", APPLE_ID).put("key", "cygnus:iron_sword");
+            ArrayNode items = (ArrayNode) snapshot.get("items");
+            items.removeAll();
+            items.add(item);
+        });
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        String output = result.getOutput();
+        assertTrue(output.contains("cygnus:iron_sword") && output.contains(APPLE_ID) && output.contains(IRON_ID)
+                        && output.contains("(local)") && output.contains("(published)"),
+                "message must name both ids, the key and the side of each entry:\n" + output);
+    }
+
+    @Test
+    void noticeCountsReplacedAndAddedEntries(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        DataJarFixtures.Metadata local = localBuild(snapshot -> addItem(snapshot, APPLE_ID, "cygnus:apple"));
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertTrue(result.getOutput().contains(REPLACED_AND_ADDED),
+                "the notice must count the local entries that replace published ones and the added one:\n"
+                        + result.getOutput());
+    }
+
     /** Publishes cygnus 1.4.0 and a 1.5.0 in which item cygnus:iron_sword became cygnus:steel_sword. */
     private static void publishSwordRenamedInVersion15(Workspace workspace) throws IOException {
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson(), DataJarFixtures.snapshotJson());
@@ -562,6 +819,35 @@ final class VulpesPluginFunctionalTest {
                 "message must name the font key in the reserved namespace:\n" + result.getOutput());
     }
 
+    /** The release of a local build: cygnus with the given version and, optionally, a format 2 base commit. */
+    private static byte[] localRelease(String version, String baseCommit) {
+        return DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(), release -> {
+            release.put("version", version);
+            if (baseCommit != null) {
+                release.put("format", 2);
+                release.putObject("base").put("repository", "https://github.com/OneLiteFeatherNET/vulpes-base")
+                        .put("branch", "main").put("commit", baseCommit);
+            }
+        });
+    }
+
+    /** Adds an item with the given id and key, as a copy of the second published item. */
+    private static void addItem(ObjectNode snapshot, String id, String key) {
+        ObjectNode item = ((ObjectNode) snapshot.get("items").get(1)).deepCopy();
+        item.put("id", id).put("key", key);
+        ((ArrayNode) snapshot.get("items")).add(item);
+    }
+
+    /** The metadata of a local build of cygnus 1.4.1-SNAPSHOT, its snapshot being the published one changed as given. */
+    private static DataJarFixtures.Metadata localBuild(Consumer<ObjectNode> change) {
+        return DataJarFixtures.modifySnapshot(localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson(),
+                change);
+    }
+
+    private static byte[] manisRelease() {
+        return DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(), release -> release.put("project", MANIS));
+    }
+
     private static TaskOutcome outcome(BuildResult result, String path) {
         BuildTask task = result.task(path);
         assertNotNull(task, path + " must have run: " + tasks(result));
@@ -606,6 +892,34 @@ final class VulpesPluginFunctionalTest {
                         }
                     }
                     """.formatted(buildCache.toString().replace("\\", "\\\\")), StandardCharsets.UTF_8);
+        }
+
+        /** Writes both metadata files into {@code vulpes/<project>/} of the project. */
+        void writeLocal(String project, byte[] releaseJson, byte[] snapshotJson) throws IOException {
+            writeReleaseOnly(project, releaseJson);
+            Files.write(file("vulpes/" + project + "/snapshot.json"), snapshotJson);
+        }
+
+        /** Writes only release.json into {@code vulpes/<project>/} of the project. */
+        void writeReleaseOnly(String project, byte[] releaseJson) throws IOException {
+            Files.createDirectories(file("vulpes/" + project));
+            Files.write(file("vulpes/" + project + "/release.json"), releaseJson);
+        }
+
+        /** Writes both metadata files into {@code <directory>/<project>/}, the directory being a build setting. */
+        void writeLocalIn(String directory, String project, byte[] releaseJson, byte[] snapshotJson) throws IOException {
+            Files.createDirectories(file(directory + "/" + project));
+            Files.write(file(directory + "/" + project + "/release.json"), releaseJson);
+            Files.write(file(directory + "/" + project + "/snapshot.json"), snapshotJson);
+        }
+
+        void deleteLocal(String project) throws IOException {
+            Path directory = file("vulpes/" + project);
+            try (Stream<Path> paths = Files.walk(directory)) {
+                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                    Files.delete(path);
+                }
+            }
         }
 
         void publish(String artifactId, String version, byte[] releaseJson) {

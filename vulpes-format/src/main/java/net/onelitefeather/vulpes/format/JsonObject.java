@@ -26,6 +26,7 @@ final class JsonObject {
     private static final ObjectMapper NODES = new ObjectMapper();
     private static final Pattern UUID_PATTERN = Pattern.compile(
             "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+    private static final Pattern COMMIT_PATTERN = Pattern.compile("[0-9a-f]{40}");
 
     @FunctionalInterface
     interface Mapper<T> {
@@ -138,6 +139,23 @@ final class JsonObject {
 
     <T> T object(String name, Mapper<T> mapper) {
         return mapChild(childPath(name), value(name, false), mapper);
+    }
+
+    /** An object that may be absent. A present {@code null} is rejected. */
+    <T> T optionalObject(String name, Mapper<T> mapper) {
+        consumed.add(name);
+        JsonNode value = node.get(name);
+        return value == null ? null : mapChild(childPath(name), value, mapper);
+    }
+
+    /** A full 40-character lower-case hexadecimal SHA-1. */
+    String commitSha(String name) {
+        String at = childPath(name);
+        String text = text(at, value(name, false));
+        if (!COMMIT_PATTERN.matcher(text).matches()) {
+            throw failAt(at, "expected full 40-character lower-case SHA-1, found " + text);
+        }
+        return text;
     }
 
     <E extends Enum<E>> E enumValue(String name, Class<E> type) {

@@ -32,6 +32,8 @@ dependencies {
     bundled(project(":vulpes-codegen"))
 
     testImplementation(testFixtures(project(":vulpes-format")))
+    testImplementation(platform(libs.jackson.bom))
+    testImplementation(libs.jackson.databind)
 }
 
 tasks.withType<Jar>().configureEach {

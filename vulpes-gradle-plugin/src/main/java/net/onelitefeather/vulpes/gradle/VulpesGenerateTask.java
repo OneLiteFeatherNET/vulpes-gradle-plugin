@@ -25,8 +25,12 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 
 /**
@@ -42,6 +46,23 @@ public abstract class VulpesGenerateTask extends DefaultTask {
     /** Artifact id by data JAR file name. */
     @Input
     public abstract MapProperty<String, String> getArtifactIdsByFileName();
+
+    /** The local content directory, {@code <projectDir>/<localContentDirectory>}. */
+    @Internal
+    public abstract DirectoryProperty getLocalContentRoot();
+
+    /** The release and snapshot files of the local content directories; a project with one takes no data JAR. */
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getLocalContentFiles();
+
+    /** Maven version by declared content project. */
+    @Input
+    public abstract MapProperty<String, String> getMavenVersionsByArtifactId();
+
+    /** Whether a local override of a declared content project fails the build, from {@code vulpes.local.forbid}. */
+    @Input
+    public abstract Property<Boolean> getForbid();
 
     /** Package of the only content project, from {@code vulpes.packageName}. */
     @Input
@@ -70,7 +91,9 @@ public abstract class VulpesGenerateTask extends DefaultTask {
         clear(output);
 
         CodegenTemplate template = VulpesTemplates.select(getTemplate().get());
-        List<ContentRelease> releases = DataJarReader.read(getDataJars(), getArtifactIdsByFileName().get());
+        List<ContentRelease> releases = DataJarReader.readAll(getLocalContentRoot().get().getAsFile().toPath(),
+                getDataJars(), getArtifactIdsByFileName().get(), getMavenVersionsByArtifactId().get(),
+                getForbid().get()).releases();
         List<String> projects = new ArrayList<>();
         releases.forEach(content -> projects.add(content.release().project()));
         Map<String, String> packages;
