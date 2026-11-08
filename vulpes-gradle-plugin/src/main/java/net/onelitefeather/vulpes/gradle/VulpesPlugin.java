@@ -1,5 +1,6 @@
 package net.onelitefeather.vulpes.gradle;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -24,6 +25,7 @@ import org.gradle.api.file.Directory;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.plugins.PluginManager;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
@@ -150,13 +152,22 @@ public class VulpesPlugin implements Plugin<Project> {
                     .srcDir(generate.flatMap(VulpesGenerateTask::getOutputDirectory));
 
             // The runtime library of the selected template, resolved lazily so that the template can be set later.
+            // With java-library it goes to api instead, see below. The plugins may be applied in any order, so the
+            // check is made when the provider is realized, not here.
             DependencyHandler dependencies = project.getDependencies();
+            PluginManager plugins = project.getPluginManager();
             Configuration implementation = project.getConfigurations().getByName(JavaPlugin.IMPLEMENTATION_CONFIGURATION_NAME);
-            implementation.getDependencies().addAllLater(extension.getTemplate().map(name -> VulpesCodegen
-                    .runtimeDependencies(VulpesTemplates.select(name)).stream()
-                    .map(dependency -> dependencies.create(dependency.group() + ":" + dependency.name() + ":"
-                            + dependency.version()))
-                    .toList()));
+            implementation.getDependencies().addAllLater(extension.getTemplate().map(name -> plugins.hasPlugin("java-library")
+                    ? List.<Dependency>of()
+                    : runtimeLibrary(dependencies, name)));
+        });
+
+        // The api configuration exists only with java-library. Consumers of the module compile against the generated
+        // types, so they need the runtime library too.
+        project.getPluginManager().withPlugin("java-library", libraryPlugin -> {
+            DependencyHandler dependencies = project.getDependencies();
+            Configuration api = project.getConfigurations().getByName(JavaPlugin.API_CONFIGURATION_NAME);
+            api.getDependencies().addAllLater(extension.getTemplate().map(name -> runtimeLibrary(dependencies, name)));
         });
 
         project.afterEvaluate(evaluated -> {
@@ -165,6 +176,14 @@ public class VulpesPlugin implements Plugin<Project> {
                         + "apply 'java' or 'java-library'.");
             }
         });
+    }
+
+    /** The runtime library of the template with the version the plugin was built for. */
+    private static List<Dependency> runtimeLibrary(DependencyHandler dependencies, String template) {
+        return VulpesCodegen.runtimeDependencies(VulpesTemplates.select(template)).stream()
+                .map(dependency -> dependencies.create(dependency.group() + ":" + dependency.name() + ":"
+                        + dependency.version()))
+                .toList();
     }
 
     private static void dataAttributes(Project project, Configuration configuration) {
