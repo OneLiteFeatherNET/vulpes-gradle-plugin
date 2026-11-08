@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.3.0...v0.4.0) (2026-11-08)
+
+
+### Features
+
+* **plugin:** use local content when no published release exists ([#32](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/32)) ([bb8bd6b](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/bb8bd6bb1e1d5a04e54c67307673f20fa61abb00))
+
 ## [0.3.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.2.0...v0.3.0) (2026-11-07)
 
 
