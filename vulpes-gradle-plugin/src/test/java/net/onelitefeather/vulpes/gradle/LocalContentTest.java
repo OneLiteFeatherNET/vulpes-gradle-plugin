@@ -325,7 +325,52 @@ final class LocalContentTest {
 
     @Test
     void blankFailureMessageIsNotResolved() {
-        assertEquals("not resolved", LocalContent.shortReason(null), "a failure without a message");
+        assertEquals("not resolved", LocalContent.shortReason((String) null), "a failure without a message");
+    }
+
+    @Test
+    void shortensNotFoundCauseToNotFound() {
+        Throwable failure = new RuntimeException("Could not resolve g:a:1.",
+                new RuntimeException("Could not find g:a:1.\nSearched in the following locations:\n  https://repo/"));
+
+        assertEquals("not found", LocalContent.shortReason(failure),
+                "a missing module named by the cause is reported as not found");
+    }
+
+    @Test
+    void shortensAuthenticationCauseToItsLine() {
+        Throwable failure = new RuntimeException("Could not resolve g:a:1.",
+                new RuntimeException("Could not GET 'https://repo/x'. Received status code 401 from server: Unauthorized"));
+
+        assertEquals("Could not GET 'https://repo/x'. Received status code 401 from server: Unauthorized",
+                LocalContent.shortReason(failure),
+                "the cause of an authentication failure is the reason, not the resolve line");
+    }
+
+    @Test
+    void throwableWithoutCauseIsShortenedLikeItsMessage() {
+        String message = "Could not resolve g:a:1.";
+
+        assertEquals(LocalContent.shortReason(message), LocalContent.shortReason(new RuntimeException(message)),
+                "a failure without a cause keeps the reason of its message");
+    }
+
+    @Test
+    void nullThrowableIsNotResolved() {
+        assertEquals("not resolved", LocalContent.shortReason((Throwable) null), "a missing failure");
+    }
+
+    @Test
+    void causeCycleEndsAtTheFailureMessage() {
+        Throwable failure = new RuntimeException("Could not resolve g:a:1.") {
+            @Override
+            public synchronized Throwable getCause() {
+                return this;
+            }
+        };
+
+        assertEquals("Could not resolve g:a:1", LocalContent.shortReason(failure),
+                "a cause that points to itself must not loop");
     }
 
     private static Path root(Path dir) {

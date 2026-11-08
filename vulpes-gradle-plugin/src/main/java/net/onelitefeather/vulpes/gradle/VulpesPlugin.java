@@ -218,7 +218,7 @@ public class VulpesPlugin implements Plugin<Project> {
                         && unresolved.getAttempted() instanceof ModuleComponentSelector module) {
                     Throwable failure = unresolved.getFailure();
                     reasons.put(module.getModule(),
-                            LocalContent.shortReason(failure == null ? null : failure.getMessage()));
+                            LocalContent.shortReason(failure));
                 }
             }
             return reasons;

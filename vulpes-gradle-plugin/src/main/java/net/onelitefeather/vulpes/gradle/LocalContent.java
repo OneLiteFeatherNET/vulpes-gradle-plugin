@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -139,6 +140,30 @@ final class LocalContent {
             }
         }
         return line.endsWith(".") ? line.substring(0, line.length() - 1) : line;
+    }
+
+    /**
+     * Shortens a failed resolution to one line for the notice. Gradle reports the reason of an unresolved module in
+     * the cause of a {@code Could not resolve ...} failure, so the whole cause chain is searched for a missing module
+     * first and the deepest message is used otherwise.
+     *
+     * @param failure the failure of the resolution, may be {@code null}
+     * @return the reason, without a final period
+     */
+    static String shortReason(Throwable failure) {
+        String reason = null;
+        Set<Throwable> visited = new HashSet<>();
+        for (Throwable current = failure; current != null && visited.add(current); current = current.getCause()) {
+            String message = current.getMessage();
+            if (message == null || message.isBlank()) {
+                continue;
+            }
+            if (message.strip().startsWith("Could not find ")) {
+                return "not found";
+            }
+            reason = message;
+        }
+        return reason == null ? "not resolved" : shortReason(reason);
     }
 
     private static String versionOf(String coordinate) {
