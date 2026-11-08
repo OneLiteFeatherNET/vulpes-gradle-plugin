@@ -770,6 +770,19 @@ final class VulpesPluginFunctionalTest {
                 "the diff must compare the published 1.4.0 with the local-only content:\n" + result.getOutput());
     }
 
+    @Test
+    void failsNamingDeclaredProjectWhoseDataJarIsMissing(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        Files.delete(workspace.repositoryFile("net/onelitefeather/vulpes/content/cygnus/1.4.0/cygnus-1.4.0.jar"));
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes.content:cygnus:1.4.0: data JAR not resolved"),
+                "a declared project with a POM but no JAR must fail, not be skipped:\n" + result.getOutput());
+    }
+
     /** Publishes cygnus 1.4.0 and a 1.5.0 in which item cygnus:iron_sword became cygnus:steel_sword. */
     private static void publishSwordRenamedInVersion15(Workspace workspace) throws IOException {
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson(), DataJarFixtures.snapshotJson());
@@ -1100,6 +1113,10 @@ final class VulpesPluginFunctionalTest {
             } catch (IOException | URISyntaxException e) {
                 throw new IllegalStateException("cannot publish adventure-key to the test repository", e);
             }
+        }
+
+        Path repositoryFile(String relative) {
+            return repository.resolve(relative);
         }
 
         String repositoryUri() {

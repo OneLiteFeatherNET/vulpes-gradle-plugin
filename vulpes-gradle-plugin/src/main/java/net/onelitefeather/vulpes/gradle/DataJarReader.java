@@ -102,6 +102,13 @@ final class DataJarReader {
             releases.add(result.content());
             overrides.add(new Override(served.project(), served.directory(), served.mavenVersion(), result));
         }
+        // A declared project whose POM resolved but whose data JAR did not is absent from the lenient view. Without a
+        // local directory nothing else provides it, so it must fail rather than be skipped.
+        for (String project : coordinates.keySet()) {
+            if (!published.containsKey(project) && !servedProjects.contains(project)) {
+                throw new GradleException(coordinates.get(project) + ": data JAR not resolved");
+            }
+        }
         releases.sort(Comparator.comparing((ContentRelease content) -> content.release().project()));
         return new Content(releases, overrides, localOnly, local.ignored());
     }
