@@ -50,9 +50,13 @@ public abstract class VulpesDiffTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getLocalContentFiles();
 
-    /** Maven version by declared content project of the current versions. */
+    /** Declared coordinate {@code group:module:version} by declared content project of the current versions. */
     @Input
-    public abstract MapProperty<String, String> getMavenVersionsByArtifactId();
+    public abstract MapProperty<String, String> getDeclaredCoordinatesByArtifactId();
+
+    /** Reason by declared content project of the current versions whose data JAR did not resolve. */
+    @Input
+    public abstract MapProperty<String, String> getUnresolvedReasons();
 
     /** Whether a local override of a declared content project fails the build, from {@code vulpes.local.forbid}. */
     @Input
@@ -89,7 +93,8 @@ public abstract class VulpesDiffTask extends DefaultTask {
         }
         Map<String, ContentRelease> current = byArtifactId(DataJarReader.readAll(
                 getLocalContentRoot().get().getAsFile().toPath(), getDataJars(), getArtifactIdsByFileName().get(),
-                getMavenVersionsByArtifactId().get(), getForbid().get()).releases());
+                getDeclaredCoordinatesByArtifactId().get(), getUnresolvedReasons().get(), getForbid().get())
+                .releases());
         Map<String, ContentRelease> base =
                 byArtifactId(DataJarReader.read(getBaseDataJars(), getBaseArtifactIdsByFileName().get()));
         String filter = getProjectFilter().getOrNull();

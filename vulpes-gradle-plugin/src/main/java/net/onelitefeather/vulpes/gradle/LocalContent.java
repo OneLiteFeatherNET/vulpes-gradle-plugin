@@ -15,8 +15,9 @@ import net.onelitefeather.vulpes.format.ContentReader;
 import net.onelitefeather.vulpes.format.ContentRelease;
 
 /**
- * Selects the local content directories that are merged over the data JARs of declared content projects. Uses no
- * Gradle types. The local files get the format checks only; the cross-entry rules run on the merged result.
+ * Selects the local content directories of the declared content projects. A directory is merged over the data JAR of
+ * its project, or, when that data JAR does not resolve, used alone as a local-only project. Uses no Gradle types.
+ * The local files get the format checks; the cross-entry rules run on the merged result, or on a local-only snapshot.
  */
 final class LocalContent {
 
@@ -31,14 +32,24 @@ final class LocalContent {
     }
 
     /**
-     * A declared content project with a local directory, whose content is merged over its data JAR.
+     * A declared content project with a local directory. Its content is merged over its data JAR, or, when the data JAR
+     * did not resolve, it is the content of a local-only project.
      *
      * @param project the content project name, equal to the directory name
      * @param directory the directory the files were read from
-     * @param mavenVersion the version of the published data JAR the local content is merged over
-     * @param content the local release and snapshot, checked for format only
+     * @param coordinate the declared coordinate {@code group:module:version}
+     * @param mavenVersion the version of the declared coordinate: the version of the published data JAR the local
+     *                     content is merged over, or the declared version of a local-only project
+     * @param content the local release and snapshot, checked for format
+     * @param unresolvedReason why the data JAR did not resolve, or {@code null} when it resolved and the content is merged
      */
-    record Served(String project, Path directory, String mavenVersion, ContentRelease content) {
+    record Served(String project, Path directory, String coordinate, String mavenVersion, ContentRelease content,
+                  String unresolvedReason) {
+
+        /** Whether the local directory is the only content of the project. */
+        boolean localOnly() {
+            return unresolvedReason != null;
+        }
     }
 
     /**
@@ -48,31 +59,34 @@ final class LocalContent {
      * @param ignored undeclared directories that hold content files, as {@code <root>/<name>}, sorted
      */
     record Resolution(List<Served> served, List<String> ignored) {
-
-        /** Names of the projects served locally. */
-        Set<String> servedProjects() {
-            Set<String> projects = new TreeSet<>();
-            served.forEach(s -> projects.add(s.project()));
-            return projects;
-        }
     }
 
     /**
      * Selects the local content.
      *
      * @param root the local content directory, {@code <projectDir>/<localContentDirectory>}
-     * @param mavenVersions Maven version by declared content project; its keys are the declared projects
+     * @param coordinates declared coordinate {@code group:module:version} by declared content project; its keys are the
+     *                    declared projects
+     * @param unresolved the reason by declared project whose data JAR did not resolve; a project absent here resolved
      * @param forbid whether a local override of a declared project is an error
      * @return the projects with a local directory and the ignored undeclared directories
-     * @throws LocalContentException if a directory is partial, fails a format check, or is used while {@code forbid} is set
+     * @throws LocalContentException if a directory is partial, fails a check, is used while {@code forbid} is set, or an
+     *                               unresolved project has no local directory
      */
-    static Resolution resolve(Path root, Map<String, String> mavenVersions, boolean forbid) {
+    static Resolution resolve(Path root, Map<String, String> coordinates, Map<String, String> unresolved,
+                              boolean forbid) {
         List<Served> served = new ArrayList<>();
-        for (String project : new TreeSet<>(mavenVersions.keySet())) {
+        for (String project : new TreeSet<>(coordinates.keySet())) {
             Path directory = root.resolve(project);
             boolean hasRelease = Files.isRegularFile(directory.resolve(RELEASE_FILE));
             boolean hasSnapshot = Files.isRegularFile(directory.resolve(SNAPSHOT_FILE));
+            String reason = unresolved.get(project);
             if (!hasRelease && !hasSnapshot) {
+                if (reason != null) {
+                    throw new LocalContentException(coordinates.get(project) + ": not resolved (" + reason
+                            + "); no local directory " + displayName(root, project) + " holds " + RELEASE_FILE
+                            + " and " + SNAPSHOT_FILE);
+                }
                 continue;
             }
             String name = displayName(root, project);
@@ -82,16 +96,53 @@ final class LocalContent {
             if (!hasSnapshot) {
                 throw new LocalContentException(name + ": missing " + SNAPSHOT_FILE + "; local content is not merged and the build does not fall back to the data JAR");
             }
-            served.add(new Served(project, directory, mavenVersions.get(project), read(name, project, directory)));
+            String coordinate = coordinates.get(project);
+            Served local = new Served(project, directory, coordinate, versionOf(coordinate),
+                    read(name, project, directory), reason);
+            if (local.localOnly()) {
+                ContentMerge.checkLocalOnly(project, local.content());
+            }
+            served.add(local);
         }
         if (forbid && !served.isEmpty()) {
             List<String> names = served.stream()
-                    .map(s -> s.project() + " (" + displayName(root, s.project()) + ")")
+                    .map(s -> s.project() + " (" + displayName(root, s.project())
+                            + (s.localOnly() ? ", local only: " + s.coordinate() + " not resolved ("
+                            + s.unresolvedReason() + ")" : "") + ")")
                     .toList();
-            throw new LocalContentException("vulpes.local.forbid=true: content merged from local directories: "
+            throw new LocalContentException("vulpes.local.forbid=true: content from local directories: "
                     + String.join(", ", names) + "; remove the local directories or unset vulpes.local.forbid");
         }
-        return new Resolution(served, ignored(root, mavenVersions.keySet()));
+        return new Resolution(served, ignored(root, coordinates.keySet()));
+    }
+
+    /**
+     * Shortens the message of a failed resolution to one line for the notice. A missing module is {@code not found};
+     * otherwise the deepest cause line ({@code > ...}) is used, or the first line when there is no cause.
+     *
+     * @param message the message of the resolution failure, may be {@code null}
+     * @return the reason, without a final period
+     */
+    static String shortReason(String message) {
+        if (message == null || message.isBlank()) {
+            return "not resolved";
+        }
+        String[] lines = message.strip().split("\\R");
+        if (lines[0].startsWith("Could not find ")) {
+            return "not found";
+        }
+        String line = lines[0].strip();
+        for (String candidate : lines) {
+            String stripped = candidate.strip();
+            if (stripped.startsWith("> ")) {
+                line = stripped.substring(2).strip();
+            }
+        }
+        return line.endsWith(".") ? line.substring(0, line.length() - 1) : line;
+    }
+
+    private static String versionOf(String coordinate) {
+        return coordinate.substring(coordinate.lastIndexOf(':') + 1);
     }
 
     private static ContentRelease read(String name, String project, Path directory) {

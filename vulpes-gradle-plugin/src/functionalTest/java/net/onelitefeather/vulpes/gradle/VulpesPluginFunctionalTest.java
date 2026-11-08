@@ -50,6 +50,9 @@ final class VulpesPluginFunctionalTest {
     private static final String CYGNUS_CONTENT = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusContent.java";
     private static final String CYGNUS_ITEM_KEYS = GENERATED + "net/onelitefeather/vulpes/content/cygnus/CygnusItemKeys.java";
     private static final String DEPENDENCY = "dependencies { vulpes(\"net.onelitefeather.vulpes.content:cygnus:1.4.0\") }";
+    private static final String SNAPSHOT_VERSION = "0.1.0-SNAPSHOT";
+    private static final String SNAPSHOT_COORDINATE = "net.onelitefeather.vulpes.content:cygnus:" + SNAPSHOT_VERSION;
+    private static final String SNAPSHOT_DEPENDENCY = "dependencies { vulpes(\"" + SNAPSHOT_COORDINATE + "\") }";
     private static final String MANIS = "manis";
     private static final String APPLE_ID = "00000000-0000-0000-0000-0000000000a1";
     private static final String IRON_ID = "12f6f240-843f-5833-8fba-a8ffbe31c173";
@@ -621,6 +624,165 @@ final class VulpesPluginFunctionalTest {
                         + result.getOutput());
     }
 
+    @Test
+    void generatesLocalOnlyProjectWithoutPublishedRelease(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("compileJava").build();
+
+        assertEquals(TaskOutcome.SUCCESS, outcome(result, ":compileJava"), "compileJava outcome");
+        assertTrue(Files.readString(workspace.file(CYGNUS_SOURCE)).contains("VERSION = \"0.1.0-SNAPSHOT\""),
+                "the code must come from the local files alone, because no published release exists");
+    }
+
+    @Test
+    void noticeNamesLocalOnlyProjectWithVersionCoordinateReasonAndBase(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, BASE_COMMIT), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        String output = result.getOutput();
+        assertTrue(output.contains("cygnus 0.1.0-SNAPSHOT: no published release used, local content only")
+                        && output.contains("could not resolve " + SNAPSHOT_COORDINATE + ": not found")
+                        && output.contains("branch main commit " + BASE_COMMIT),
+                "notice must name the project, the local version, that no release is used, the coordinate, the reason"
+                        + " and the base:\n" + output);
+    }
+
+    @Test
+    void resolvedProjectWithLocalDirectoryPrintsNoLocalOnlyNotice(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease("1.4.1-SNAPSHOT", null), DataJarFixtures.snapshotJson());
+        workspace.build(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertFalse(result.getOutput().contains("no published release used"),
+                "a resolvable project merges and prints no local-only notice:\n" + result.getOutput());
+    }
+
+    @Test
+    void failsNamingUnresolvedProjectWithoutLocalDirectory(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.build(SNAPSHOT_DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        String output = result.getOutput();
+        assertTrue(output.contains(SNAPSHOT_COORDINATE) && output.contains("not found")
+                        && output.contains("vulpes/cygnus"),
+                "message must name the coordinate, the reason and the expected directory:\n" + output);
+    }
+
+    @Test
+    void forbidFailsNamingLocalOnlyProjectWithCoordinateAndReason(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("-Pvulpes.local.forbid=true", "vulpesGenerate").buildAndFail();
+
+        String output = result.getOutput();
+        assertTrue(output.contains("vulpes.local.forbid=true") && output.contains("cygnus")
+                        && output.contains(SNAPSHOT_COORDINATE) && output.contains("not found"),
+                "forbid must name the local-only project, its coordinate and the reason:\n" + output);
+    }
+
+    @Test
+    void localOnlyNoticeIsPrintedWhenGenerationIsUpToDate(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+
+        BuildResult result = workspace.runner("vulpesGenerate").build();
+
+        assertEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "precondition: up to date");
+        assertTrue(result.getOutput().contains("no published release used"),
+                "the local-only notice must print on every build:\n" + result.getOutput());
+    }
+
+    @Test
+    void localOnlyProjectSwitchesToMergeWhenReleaseIsPublished(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+        workspace.publish(CYGNUS, SNAPSHOT_VERSION, DataJarFixtures.modifyRelease(DataJarFixtures.releaseJson(),
+                release -> release.put("version", SNAPSHOT_VERSION)), DataJarFixtures.snapshotJson());
+
+        BuildResult result = workspace.runner("--refresh-dependencies", "vulpesGenerate").build();
+
+        assertNotEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"),
+                "the classpath changed, so generation must rerun");
+        assertTrue(result.getOutput().contains("is merged over published 0.1.0-SNAPSHOT")
+                        && !result.getOutput().contains("no published release used"),
+                "the notice must name the published version and no longer print a local-only line:\n"
+                        + result.getOutput());
+    }
+
+    @Test
+    void removedLocalDirectoryOfLocalOnlyProjectFailsNamingCoordinateAndReason(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("vulpesGenerate").build();
+        workspace.deleteLocal(CYGNUS);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains(SNAPSHOT_COORDINATE) && result.getOutput().contains("not found"),
+                "nothing else provides the project, so the message must name the coordinate and the reason:\n"
+                        + result.getOutput());
+    }
+
+    @Test
+    void secondRunOfLocalOnlyProjectReusesConfigurationCache(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+        workspace.runner("--configuration-cache", "vulpesGenerate").build();
+
+        BuildResult result = workspace.runner("--configuration-cache", "vulpesGenerate").build();
+
+        assertTrue(result.getOutput().contains("Configuration cache entry reused"),
+                "second run must reuse the configuration cache:\n" + result.getOutput());
+    }
+
+    @Test
+    void diffUsesLocalOnlyProjectOnCurrentSide(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.writeLocal(CYGNUS, localRelease(SNAPSHOT_VERSION, null), DataJarFixtures.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner(FROM_1_4_0, "vulpesDiff").build();
+
+        assertTrue(Files.isRegularFile(workspace.file(DIFF_REPORTS + "cygnus-1.4.0-" + SNAPSHOT_VERSION + ".md")),
+                "the current side must be the local-only project, so the report is named after its local version:\n"
+                        + result.getOutput());
+        assertTrue(result.getOutput().contains("vulpes diff cygnus 1.4.0 -> 0.1.0-SNAPSHOT"),
+                "the diff must compare the published 1.4.0 with the local-only content:\n" + result.getOutput());
+    }
+
+    @Test
+    void failsNamingDeclaredProjectWhoseDataJarIsMissing(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        Files.delete(workspace.repositoryFile("net/onelitefeather/vulpes/content/cygnus/1.4.0/cygnus-1.4.0.jar"));
+        workspace.build(DEPENDENCY);
+
+        BuildResult result = workspace.runner("vulpesGenerate").buildAndFail();
+
+        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes.content:cygnus:1.4.0: data JAR not resolved"),
+                "a declared project with a POM but no JAR must fail, not be skipped:\n" + result.getOutput());
+    }
+
     /** Publishes cygnus 1.4.0 and a 1.5.0 in which item cygnus:iron_sword became cygnus:steel_sword. */
     private static void publishSwordRenamedInVersion15(Workspace workspace) throws IOException {
         workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson(), DataJarFixtures.snapshotJson());
@@ -951,6 +1113,10 @@ final class VulpesPluginFunctionalTest {
             } catch (IOException | URISyntaxException e) {
                 throw new IllegalStateException("cannot publish adventure-key to the test repository", e);
             }
+        }
+
+        Path repositoryFile(String relative) {
+            return repository.resolve(relative);
         }
 
         String repositoryUri() {

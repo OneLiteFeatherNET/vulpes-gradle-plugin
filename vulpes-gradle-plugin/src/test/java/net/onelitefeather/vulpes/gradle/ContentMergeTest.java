@@ -2,6 +2,7 @@ package net.onelitefeather.vulpes.gradle;
 
 import static net.onelitefeather.vulpes.format.fixtures.DataJarFixtures.releaseJson;
 import static net.onelitefeather.vulpes.format.fixtures.DataJarFixtures.snapshotJson;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -235,6 +236,34 @@ final class ContentMergeTest {
                 () -> merge(local(s -> appendCopyOf(s, "assets", 1, c -> c.put("sha1", NEW_SHA1)))));
 
         assertMessage(e, HUD_ASSET);
+    }
+
+    @Test
+    void failsOnDuplicateKeyInLocalOnlySnapshot() {
+        LocalContentException e = assertThrows(LocalContentException.class,
+                () -> ContentMerge.checkLocalOnly(PROJECT,
+                        local(s -> appendCopyOf(s, "items", 0, c -> c.put("id", NEW_ID)))));
+
+        assertMessage(e, "cygnus:iron_sword", IRON_SWORD, NEW_ID, "(local)");
+        assertFalse(e.getMessage().contains("(published)"), "every entry of a local-only project comes from local:\n"
+                + e.getMessage());
+    }
+
+    @Test
+    void failsOnFontLocationWithoutAssetInLocalOnlySnapshot() {
+        LocalContentException e = assertThrows(LocalContentException.class,
+                () -> ContentMerge.checkLocalOnly(PROJECT, local(s -> {
+                    clear(s, "assets");
+                    entry(s, "fonts", 0).put("file", "cygnus:font/missing.png");
+                })));
+
+        assertMessage(e, "cygnus:font/missing.png", "cygnus:hud_icons", "(local)");
+    }
+
+    @Test
+    void acceptsValidLocalOnlySnapshotWithAdvancementTree() {
+        assertDoesNotThrow(() -> ContentMerge.checkLocalOnly(PROJECT, local(s -> { })),
+                "a complete local snapshot with its advancement tree passes the single-snapshot checks");
     }
 
     private static ContentRelease published() {

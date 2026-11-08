@@ -33,9 +33,13 @@ public abstract class VulpesLocalContentTask extends DefaultTask {
     @Internal
     public abstract DirectoryProperty getLocalContentRoot();
 
-    /** Maven version by declared content project. Its keys are the declared content projects. */
+    /** Declared coordinate {@code group:module:version} by declared content project. Its keys are the declared projects. */
     @Input
-    public abstract MapProperty<String, String> getMavenVersionsByArtifactId();
+    public abstract MapProperty<String, String> getDeclaredCoordinatesByArtifactId();
+
+    /** Reason by declared content project whose data JAR did not resolve. */
+    @Input
+    public abstract MapProperty<String, String> getUnresolvedReasons();
 
     /** Whether a local override of a declared content project fails the build, from {@code vulpes.local.forbid}. */
     @Input
@@ -45,12 +49,17 @@ public abstract class VulpesLocalContentTask extends DefaultTask {
     public void notice() {
         Path root = getLocalContentRoot().get().getAsFile().toPath();
         DataJarReader.Content content = DataJarReader.readAll(root, getDataJars(), getArtifactIdsByFileName().get(),
-                getMavenVersionsByArtifactId().get(), getForbid().get());
+                getDeclaredCoordinatesByArtifactId().get(), getUnresolvedReasons().get(), getForbid().get());
         for (DataJarReader.Override override : content.overrides()) {
             ContentMerge.Merged merged = override.merged();
             getLogger().lifecycle("vulpes local content: {} {} is merged over published {} from {}: {} replaced, {} added; {}",
                     override.project(), merged.content().release().version(), override.publishedVersion(),
                     override.directory(), merged.replaced(), merged.added(), base(merged.content().release().base()));
+        }
+        for (LocalContent.Served served : content.localOnly()) {
+            getLogger().lifecycle("vulpes local content: {} {}: no published release used, local content only; could not resolve {}: {}; {}",
+                    served.project(), served.content().release().version(), served.coordinate(),
+                    served.unresolvedReason(), base(served.content().release().base()));
         }
         for (String ignored : content.ignored()) {
             getLogger().warn("vulpes local content: ignoring {}, no vulpes(...) dependency declares this content project",

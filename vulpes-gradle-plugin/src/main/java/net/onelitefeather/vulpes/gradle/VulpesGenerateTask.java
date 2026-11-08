@@ -56,9 +56,13 @@ public abstract class VulpesGenerateTask extends DefaultTask {
     @PathSensitive(PathSensitivity.RELATIVE)
     public abstract ConfigurableFileCollection getLocalContentFiles();
 
-    /** Maven version by declared content project. */
+    /** Declared coordinate {@code group:module:version} by declared content project. */
     @Input
-    public abstract MapProperty<String, String> getMavenVersionsByArtifactId();
+    public abstract MapProperty<String, String> getDeclaredCoordinatesByArtifactId();
+
+    /** Reason by declared content project whose data JAR did not resolve. */
+    @Input
+    public abstract MapProperty<String, String> getUnresolvedReasons();
 
     /** Whether a local override of a declared content project fails the build, from {@code vulpes.local.forbid}. */
     @Input
@@ -92,8 +96,8 @@ public abstract class VulpesGenerateTask extends DefaultTask {
 
         CodegenTemplate template = VulpesTemplates.select(getTemplate().get());
         List<ContentRelease> releases = DataJarReader.readAll(getLocalContentRoot().get().getAsFile().toPath(),
-                getDataJars(), getArtifactIdsByFileName().get(), getMavenVersionsByArtifactId().get(),
-                getForbid().get()).releases();
+                getDataJars(), getArtifactIdsByFileName().get(), getDeclaredCoordinatesByArtifactId().get(),
+                getUnresolvedReasons().get(), getForbid().get()).releases();
         List<String> projects = new ArrayList<>();
         releases.forEach(content -> projects.add(content.release().project()));
         Map<String, String> packages;
