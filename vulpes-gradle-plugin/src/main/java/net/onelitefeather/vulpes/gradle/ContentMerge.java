@@ -98,6 +98,24 @@ final class ContentMerge {
         return new Merged(new ContentRelease(local.release(), merged), replaced, added);
     }
 
+    /**
+     * Checks a local-only snapshot with the cross-entry rules of a single snapshot. Every entry comes from the local
+     * side, so a failure names {@code local} for each entry it names.
+     *
+     * @param project the content project name, for error messages
+     * @param local the local release and snapshot of a project that has no published release
+     * @throws LocalContentException if a rule fails
+     */
+    static void checkLocalOnly(String project, ContentRelease local) {
+        ContentMerge checker = new ContentMerge(project);
+        Snapshot s = local.snapshot();
+        for (Object entry : concat(s.items(), s.attributes(), s.fonts(), s.sounds(), s.advancements(),
+                s.expressionFunctions(), s.expressions(), s.assets())) {
+            checker.sides.put(entry, LOCAL);
+        }
+        checker.check(s);
+    }
+
     private <T> List<T> mergeList(List<T> published, List<T> local, Function<T, Object> identity,
                                   Function<T, String> order) {
         Map<Object, T> publishedById = new HashMap<>();

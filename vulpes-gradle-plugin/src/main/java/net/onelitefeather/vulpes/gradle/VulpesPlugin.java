@@ -7,14 +7,21 @@ import net.onelitefeather.vulpes.codegen.VulpesCodegen;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.ArtifactCollection;
+import org.gradle.api.artifacts.ArtifactView;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.artifacts.dsl.DependencyHandler;
+import org.gradle.api.artifacts.result.DependencyResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
+import org.gradle.api.artifacts.result.ResolvedDependencyResult;
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult;
 import org.gradle.api.attributes.Category;
 import org.gradle.api.attributes.Usage;
 import org.gradle.api.file.Directory;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.provider.Provider;
@@ -53,6 +60,10 @@ public class VulpesPlugin implements Plugin<Project> {
             data.setTransitive(false);
             dataAttributes(project, data);
         }).get();
+        // Lenient: a declared project whose data JAR does not resolve yields no file instead of failing the build.
+        ArtifactView lenientData = vulpesData.getIncoming().artifactView(view -> view.lenient(true));
+        ArtifactCollection lenientArtifacts = lenientData.getArtifacts();
+        FileCollection lenientFiles = lenientData.getFiles();
 
         Provider<String> diffFrom = project.getProviders().gradleProperty(DIFF_FROM_PROPERTY);
         Provider<String> diffProject = project.getProviders().gradleProperty(DIFF_PROJECT_PROPERTY);
@@ -80,7 +91,8 @@ public class VulpesPlugin implements Plugin<Project> {
                 .dir(extension.getLocalContentDirectory());
         Provider<Boolean> localForbid = project.getProviders().gradleProperty(LOCAL_FORBID_PROPERTY)
                 .map(Boolean::parseBoolean).orElse(false);
-        Provider<Map<String, String>> mavenVersions = mavenVersionsByArtifactId(vulpesData);
+        Provider<Map<String, String>> declaredCoordinates = declaredCoordinatesByArtifactId(vulpesData);
+        Provider<Map<String, String>> unresolvedReasons = unresolvedReasonsByArtifactId(vulpesData);
         FileTree localFiles = project.fileTree(localRoot,
                 tree -> tree.include("*/" + LocalContent.RELEASE_FILE, "*/" + LocalContent.SNAPSHOT_FILE));
 
@@ -88,10 +100,11 @@ public class VulpesPlugin implements Plugin<Project> {
                 VulpesLocalContentTask.class, task -> {
                     task.setGroup("vulpes");
                     task.setDescription("Prints the local content that is merged over the published data JARs.");
-                    task.getDataJars().from(vulpesData);
-                    task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+                    task.getDataJars().from(lenientFiles);
+                    task.getArtifactIdsByFileName().set(artifactIdsByFileName(lenientArtifacts));
                     task.getLocalContentRoot().set(localRoot);
-                    task.getMavenVersionsByArtifactId().set(mavenVersions);
+                    task.getDeclaredCoordinatesByArtifactId().set(declaredCoordinates);
+                    task.getUnresolvedReasons().set(unresolvedReasons);
                     task.getForbid().set(localForbid);
                 });
 
@@ -100,11 +113,12 @@ public class VulpesPlugin implements Plugin<Project> {
                     task.setGroup("vulpes");
                     task.setDescription("Generates Java sources from the Vulpes content data JARs.");
                     task.dependsOn(localContent);
-                    task.getDataJars().from(vulpesData);
-                    task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+                    task.getDataJars().from(lenientFiles);
+                    task.getArtifactIdsByFileName().set(artifactIdsByFileName(lenientArtifacts));
                     task.getLocalContentRoot().set(localRoot);
                     task.getLocalContentFiles().from(localFiles);
-                    task.getMavenVersionsByArtifactId().set(mavenVersions);
+                    task.getDeclaredCoordinatesByArtifactId().set(declaredCoordinates);
+                    task.getUnresolvedReasons().set(unresolvedReasons);
                     task.getForbid().set(localForbid);
                     task.getTemplate().set(extension.getTemplate());
                     task.getPackageName().set(extension.getPackageName());
@@ -116,13 +130,14 @@ public class VulpesPlugin implements Plugin<Project> {
         project.getTasks().register(DIFF_TASK_NAME, VulpesDiffTask.class, task -> {
             task.setGroup("vulpes");
             task.setDescription("Compares the content data JARs with -Pvulpes.diff.from=<version>.");
-            task.getDataJars().from(vulpesData);
-            task.getArtifactIdsByFileName().set(artifactIdsByFileName(vulpesData));
+            task.getDataJars().from(lenientFiles);
+            task.getArtifactIdsByFileName().set(artifactIdsByFileName(lenientArtifacts));
             task.getBaseDataJars().from(vulpesDiffBase);
-            task.getBaseArtifactIdsByFileName().set(artifactIdsByFileName(vulpesDiffBase));
+            task.getBaseArtifactIdsByFileName().set(artifactIdsByFileName(vulpesDiffBase.getIncoming().getArtifacts()));
             task.getLocalContentRoot().set(localRoot);
             task.getLocalContentFiles().from(localFiles);
-            task.getMavenVersionsByArtifactId().set(mavenVersions);
+            task.getDeclaredCoordinatesByArtifactId().set(declaredCoordinates);
+            task.getUnresolvedReasons().set(unresolvedReasons);
             task.getForbid().set(localForbid);
             task.getBaseVersion().set(diffFrom);
             task.getProjectFilter().set(diffProject);
@@ -159,10 +174,10 @@ public class VulpesPlugin implements Plugin<Project> {
                 project.getObjects().named(Category.class, Category.LIBRARY));
     }
 
-    private static Provider<Map<String, String>> artifactIdsByFileName(Configuration vulpesData) {
-        return vulpesData.getIncoming().getArtifacts().getResolvedArtifacts().map(artifacts -> {
+    private static Provider<Map<String, String>> artifactIdsByFileName(ArtifactCollection artifacts) {
+        return artifacts.getResolvedArtifacts().map(resolved -> {
             Map<String, String> artifactIds = new TreeMap<>();
-            for (ResolvedArtifactResult artifact : artifacts) {
+            for (ResolvedArtifactResult artifact : resolved) {
                 if (artifact.getId().getComponentIdentifier() instanceof ModuleComponentIdentifier module) {
                     artifactIds.put(artifact.getFile().getName(), module.getModule());
                 }
@@ -171,15 +186,42 @@ public class VulpesPlugin implements Plugin<Project> {
         });
     }
 
-    private static Provider<Map<String, String>> mavenVersionsByArtifactId(Configuration vulpesData) {
-        return vulpesData.getIncoming().getArtifacts().getResolvedArtifacts().map(artifacts -> {
-            Map<String, String> versions = new TreeMap<>();
-            for (ResolvedArtifactResult artifact : artifacts) {
-                if (artifact.getId().getComponentIdentifier() instanceof ModuleComponentIdentifier module) {
-                    versions.put(module.getModule(), module.getVersion());
+    /**
+     * The declared content projects of the {@code vulpes} scope, read from the direct dependencies of the root
+     * component, so that a declared project is known even when its data JAR does not resolve. A resolved project has
+     * the version it resolved to, an unresolved one the version it was declared with.
+     */
+    private static Provider<Map<String, String>> declaredCoordinatesByArtifactId(Configuration vulpesData) {
+        return vulpesData.getIncoming().getResolutionResult().getRootComponent().map(root -> {
+            Map<String, String> coordinates = new TreeMap<>();
+            for (DependencyResult dependency : root.getDependencies()) {
+                if (dependency instanceof ResolvedDependencyResult resolved
+                        && resolved.getSelected().getId() instanceof ModuleComponentIdentifier module) {
+                    coordinates.put(module.getModule(),
+                            module.getGroup() + ":" + module.getModule() + ":" + module.getVersion());
+                } else if (dependency instanceof UnresolvedDependencyResult unresolved
+                        && unresolved.getAttempted() instanceof ModuleComponentSelector module) {
+                    coordinates.put(module.getModule(),
+                            module.getGroup() + ":" + module.getModule() + ":" + module.getVersion());
                 }
             }
-            return versions;
+            return coordinates;
+        });
+    }
+
+    /** The reason by declared content project whose data JAR did not resolve, shortened to one line. */
+    private static Provider<Map<String, String>> unresolvedReasonsByArtifactId(Configuration vulpesData) {
+        return vulpesData.getIncoming().getResolutionResult().getRootComponent().map(root -> {
+            Map<String, String> reasons = new TreeMap<>();
+            for (DependencyResult dependency : root.getDependencies()) {
+                if (dependency instanceof UnresolvedDependencyResult unresolved
+                        && unresolved.getAttempted() instanceof ModuleComponentSelector module) {
+                    Throwable failure = unresolved.getFailure();
+                    reasons.put(module.getModule(),
+                            LocalContent.shortReason(failure == null ? null : failure.getMessage()));
+                }
+            }
+            return reasons;
         });
     }
 

@@ -159,7 +159,9 @@ The local entries are merged over the published data JAR of the same declared pr
 - `projectId` and `namespace` must equal the published ones. The pack and the release (version, revision and base) come from the local files.
 - The rules that relate entries to each other (unique ids and keys, previous keys, asset paths, expression names, advancement parents) are checked on the merged content. A failure names both entries and whether each one comes from the local or the published side.
 
-The Maven artifact is still resolved, because the merge needs the published content, so the repository credentials are still needed. Remove the directory to build from the published content alone. Add `/vulpes/` to `.gitignore`, so that local files are not committed.
+For a merged project the Maven artifact is still resolved, because the merge needs the published content, so the repository credentials are still needed. Remove the directory to build from the published content alone. Add `/vulpes/` to `.gitignore`, so that local files are not committed.
+
+A content project that has no published release yet can be tested the same way. Declare its `vulpes(...)` line with the version it will be published under, for example `0.1.0-SNAPSHOT`, and keep the local directory. When no data JAR of that coordinate resolves, the local files are used alone, and the build does not need the Maven artifact. Once the release is published and resolves, the build merges the local files over it, and the notice names the published version.
 
 Every build prints one line per merged project, with the local version, the published version it is merged over, the number of replaced and added entries, and the base branch and commit recorded in `release.json`:
 
@@ -167,10 +169,17 @@ Every build prints one line per merged project, with the local version, the publ
 vulpes local content: cygnus 1.4.1-SNAPSHOT is merged over published 1.4.0 from vulpes/cygnus: 3 replaced, 2 added; base ... branch main commit ...
 ```
 
+For a project without a published release, the build prints one line that names the local version, the declared coordinate and the reason the data JAR did not resolve:
+
+```
+vulpes local content: cygnus 0.1.0-SNAPSHOT: no published release used, local content only; could not resolve net.onelitefeather.vulpes.content:cygnus:0.1.0-SNAPSHOT: not found; base ...
+```
+
 - A directory with only one of the two files fails the build and names the missing file.
+- A declared project whose data JAR does not resolve and that has no local directory fails the build, and the message names the coordinate and the reason.
 - A directory for a project that no `vulpes(...)` dependency declares is ignored with a warning. It adds no content.
 - `vulpes { localContentDirectory = "content" }` changes the parent directory, which is relative to the project directory and defaults to `vulpes`.
-- In CI, run with `-Pvulpes.local.forbid=true`. The build then fails when a declared project is merged with a local directory.
+- In CI, run with `-Pvulpes.local.forbid=true`. The build then fails when a declared project is merged with a local directory, and when a local directory is used alone, which names the coordinate and the reason. A missing publish therefore never passes CI silently.
 - A `release.json` in format 2 may carry a `base` record with `repository`, `branch` and `commit`. Older plugin versions reject format 2, so the generator writes it only once a plugin release that reads it is available.
 
 ## License
