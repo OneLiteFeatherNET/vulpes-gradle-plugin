@@ -39,7 +39,7 @@ dependencyResolutionManagement {
 // build.gradle.kts
 plugins {
     java
-    id("net.onelitefeather.vulpes") version "0.2.0"
+    id("net.onelitefeather.vulpes") version "0.4.1" // x-release-please-version
 }
 
 dependencies {
