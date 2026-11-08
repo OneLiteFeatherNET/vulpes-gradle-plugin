@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.4.0...v0.4.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **plugin:** expose the template runtime library as api ([#37](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/37)) ([eb301bf](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/eb301bf6d1c432718ae02b2b92c11cea55c09a78))
+* **plugin:** name the cause when a data jar does not resolve ([#35](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/issues/35)) ([667c323](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/commit/667c323b25fa31d3c01a41d8cdf9774911e06705))
+
 ## [0.4.0](https://github.com/OneLiteFeatherNET/vulpes-gradle-plugin/compare/v0.3.0...v0.4.0) (2026-11-08)
 
 
