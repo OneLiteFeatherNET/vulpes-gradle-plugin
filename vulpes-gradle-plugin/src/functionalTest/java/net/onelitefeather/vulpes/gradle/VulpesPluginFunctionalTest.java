@@ -933,6 +933,66 @@ final class VulpesPluginFunctionalTest {
     }
 
     @Test
+    void consumerCompilesGeneratedKeysWithoutDeclaringAdventureKey(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.buildModules(DEPENDENCY + "\n" + KEYS_TEMPLATE, "dependencies { implementation(project(\":content\")) }");
+        workspace.writeGameSource("""
+                package net.onelitefeather.vulpes.game;
+
+                import net.kyori.adventure.key.Key;
+                import net.onelitefeather.vulpes.content.cygnus.CygnusItemKeys;
+
+                final class Game {
+
+                    static final Key IRON_SWORD = CygnusItemKeys.IRON_SWORD;
+                }
+                """);
+
+        BuildResult result = workspace.runner(":game:compileJava").build();
+
+        assertEquals(TaskOutcome.SUCCESS, outcome(result, ":game:compileJava"), "game compileJava outcome");
+    }
+
+    @Test
+    void javaLibraryAddsAdventureKeyToApi(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.buildLibrary(DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult result = workspace.runner("dependencies", "--configuration", "api").build();
+
+        assertTrue(result.getOutput().contains("net.kyori:adventure-key:5.2.0"),
+                "api must name adventure-key in the version of the plugin:\n" + result.getOutput());
+    }
+
+    @Test
+    void javaLibraryKeepsVulpesBaseOutOfImplementation(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.buildLibrary(DEPENDENCY);
+
+        BuildResult result = workspace.runner("dependencies", "--configuration", "implementation").build();
+
+        assertFalse(result.getOutput().contains("net.onelitefeather.vulpes:vulpes-base"),
+                "implementation must not name vulpes-base when api does:\n" + result.getOutput());
+    }
+
+    @Test
+    void consumerOfMinestomLibraryModuleSeesVulpesBase(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        workspace.publish(CYGNUS, VERSION, DataJarFixtures.releaseJson());
+        workspace.publishVulpesBasePom();
+        workspace.buildModules(DEPENDENCY, "dependencies { implementation(project(\":content\")) }");
+
+        BuildResult result = workspace.runner(":game:dependencies", "--configuration", "compileClasspath").build();
+
+        assertTrue(result.getOutput().contains("net.onelitefeather.vulpes:vulpes-base:0.6.0")
+                        && !result.getOutput().contains("FAILED"),
+                "game compileClasspath must resolve vulpes-base through api of content:\n" + result.getOutput());
+    }
+
+    @Test
     void failsWhenProjectFunctionIsNamedLikeBuiltInFunction(@TempDir Path dir) throws IOException {
         Workspace workspace = new Workspace(dir);
         DataJarFixtures.Metadata shadowing = DataJarFixtures.modifySnapshot(DataJarFixtures.releaseJson(),
@@ -1127,9 +1187,18 @@ final class VulpesPluginFunctionalTest {
          * Writes the build script with the java and vulpes plugins and the file repository, followed by the body.
          */
         void build(String body) throws IOException {
+            buildWith("java", body);
+        }
+
+        /** Like {@link #build(String)}, with java-library instead of java. */
+        void buildLibrary(String body) throws IOException {
+            buildWith("`java-library`", body);
+        }
+
+        private void buildWith(String javaPlugin, String body) throws IOException {
             write("""
                     plugins {
-                        java
+                        %s
                         id("net.onelitefeather.vulpes")
                     }
 
@@ -1140,7 +1209,71 @@ final class VulpesPluginFunctionalTest {
                     }
 
                     %s
-                    """.formatted(repositoryUri(), body));
+                    """.formatted(javaPlugin, repositoryUri(), body));
+        }
+
+        /**
+         * Writes the modules content and game: content applies java-library and the plugin, game applies java. The
+         * root build script declares the repository for both modules.
+         */
+        void buildModules(String contentBody, String gameBody) throws IOException {
+            Files.writeString(project.resolve("settings.gradle.kts"), """
+                    rootProject.name = "game"
+                    include("content", "game")
+
+                    buildCache {
+                        local {
+                            directory = file("%s")
+                        }
+                    }
+                    """.formatted(buildCache.toString().replace("\\", "\\\\")), StandardCharsets.UTF_8);
+            write("""
+                    allprojects {
+                        repositories {
+                            maven {
+                                url = uri("%s")
+                            }
+                        }
+                    }
+                    """.formatted(repositoryUri()));
+            Files.createDirectories(file("content"));
+            Files.writeString(file("content/build.gradle.kts"), """
+                    plugins {
+                        `java-library`
+                        id("net.onelitefeather.vulpes")
+                    }
+
+                    %s
+                    """.formatted(contentBody), StandardCharsets.UTF_8);
+            Files.createDirectories(file("game"));
+            Files.writeString(file("game/build.gradle.kts"), """
+                    plugins {
+                        java
+                    }
+
+                    %s
+                    """.formatted(gameBody), StandardCharsets.UTF_8);
+        }
+
+        /** Writes the game module's source file for the Game class of the package {@code net.onelitefeather.vulpes.game}. */
+        void writeGameSource(String source) throws IOException {
+            Path directory = Files.createDirectories(file("game/src/main/java/net/onelitefeather/vulpes/game"));
+            Files.writeString(directory.resolve("Game.java"), source, StandardCharsets.UTF_8);
+        }
+
+        /** Publishes vulpes-base 0.6.0 as a pom without a jar, so that its coordinate resolves offline. */
+        void publishVulpesBasePom() throws IOException {
+            Path module = Files.createDirectories(repository.resolve("net/onelitefeather/vulpes/vulpes-base/0.6.0"));
+            Files.writeString(module.resolve("vulpes-base-0.6.0.pom"), """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <project xmlns="http://maven.apache.org/POM/4.0.0">
+                        <modelVersion>4.0.0</modelVersion>
+                        <groupId>net.onelitefeather.vulpes</groupId>
+                        <artifactId>vulpes-base</artifactId>
+                        <version>0.6.0</version>
+                        <packaging>pom</packaging>
+                    </project>
+                    """, StandardCharsets.UTF_8);
         }
 
         void write(String buildScript) throws IOException {

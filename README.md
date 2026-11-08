@@ -56,8 +56,14 @@ vulpes {
 
 Each content project in the `vulpes` configuration generates sources into `build/generated/sources/vulpes/java/main` before `compileJava` runs.
 
-- `minestom` (default) generates the full content: entries, the content object, resource packs and formulas. It needs vulpes-base, which the plugin adds as a runtime dependency. vulpes-base does not bring Minestom or the Adventure API, so the game must have both on its compile classpath itself, as every Minestom game already does.
-- `keys` generates the key constants and the expression function interface only. It needs adventure-key and no server.
+- `minestom` (default) generates the full content: entries, the content object, resource packs and formulas. It needs vulpes-base, which the plugin adds as a runtime dependency: to `api` when the project applies `java-library`, so that consumers of the module compile against the generated types, and to `implementation` when it applies only `java`. vulpes-base does not bring Minestom or the Adventure API, so the game must have both on its compile classpath itself, as every Minestom game already does.
+- `keys` generates the key constants and the expression function interface only. It needs adventure-key and no server; like vulpes-base, adventure-key goes to `api` with `java-library` and to `implementation` with `java`.
+
+### Multi-module builds
+
+A game can be split into modules. Apply the plugin in one module with `java-library`, for example a `content` module that holds the content projects, and let the other modules depend on it with `implementation(project(":content"))`. The generated types reach those modules through `api`, so they get the template's runtime library without declaring it themselves.
+
+The local content directory `vulpes/<project>` is relative to the module that applies the plugin. Use `localContentDirectory = "../vulpes"` in `content` to point to a directory at the root. The game module still provides Minestom and the Adventure API itself.
 
 With several content projects, set the package per project with `vulpes { project("cygnus") { packageName = "..." } }`. `vulpes.packageName` is only allowed for a single content project.
 
