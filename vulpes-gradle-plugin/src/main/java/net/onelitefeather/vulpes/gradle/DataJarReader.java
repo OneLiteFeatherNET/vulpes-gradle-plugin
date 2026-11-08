@@ -31,9 +31,11 @@ final class DataJarReader {
      * @param overrides the declared projects merged with a local directory, sorted by project name
      * @param localOnly the declared projects that use their local directory alone, sorted by project name
      * @param ignored undeclared directories that were ignored, as {@code <root>/<name>}
+     * @param missingAssets references to resource locations without an asset, of the merged and the local-only projects,
+     *                      by project name
      */
     record Content(List<ContentRelease> releases, List<Override> overrides, List<LocalContent.Served> localOnly,
-                   List<String> ignored) {
+                   List<String> ignored, List<ContentMerge.MissingAsset> missingAssets) {
     }
 
     /**
@@ -82,10 +84,12 @@ final class DataJarReader {
         });
         List<Override> overrides = new ArrayList<>();
         List<LocalContent.Served> localOnly = new ArrayList<>();
+        List<ContentMerge.MissingAsset> missingAssets = new ArrayList<>();
         for (LocalContent.Served served : local.served()) {
             if (served.localOnly()) {
                 releases.add(served.content());
                 localOnly.add(served);
+                missingAssets.addAll(served.missingAssets());
                 continue;
             }
             ContentRelease base = published.get(served.project());
@@ -101,6 +105,7 @@ final class DataJarReader {
             }
             releases.add(result.content());
             overrides.add(new Override(served.project(), served.directory(), served.mavenVersion(), result));
+            missingAssets.addAll(result.missingAssets());
         }
         // A declared project whose POM resolved but whose data JAR did not is absent from the lenient view. Without a
         // local directory nothing else provides it, so it must fail rather than be skipped.
@@ -110,7 +115,7 @@ final class DataJarReader {
             }
         }
         releases.sort(Comparator.comparing((ContentRelease content) -> content.release().project()));
-        return new Content(releases, overrides, localOnly, local.ignored());
+        return new Content(releases, overrides, localOnly, local.ignored(), List.copyOf(missingAssets));
     }
 
     /**

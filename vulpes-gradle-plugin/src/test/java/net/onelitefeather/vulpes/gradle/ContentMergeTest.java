@@ -2,7 +2,6 @@ package net.onelitefeather.vulpes.gradle;
 
 import static net.onelitefeather.vulpes.format.fixtures.DataJarFixtures.releaseJson;
 import static net.onelitefeather.vulpes.format.fixtures.DataJarFixtures.snapshotJson;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -40,6 +39,11 @@ final class ContentMergeTest {
     private static final String HUD_ASSET = "assets/cygnus/textures/font/hud_icons.png";
     private static final String BACKGROUND_ASSET = "assets/cygnus/textures/gui/advancements/backgrounds/cygnus.png";
     private static final String NEW_SHA1 = "1111111111111111111111111111111111111111";
+    private static final String CLICK_ASSET = "assets/cygnus/sounds/ui/click.ogg";
+    private static final String HUD_LOCATION = "cygnus:font/hud_icons.png";
+    private static final String CLICK_LOCATION = "cygnus:ui/click";
+    private static final String UI_LOCATION = "cygnus:font/ui.png";
+    private static final String MISSING_LOCATION = "cygnus:font/missing.png";
 
     @Test
     void replacesPublishedEntryWithSameIdCompletely() {
@@ -220,14 +224,49 @@ final class ContentMergeTest {
     }
 
     @Test
-    void failsOnFontLocationWithoutAsset() {
-        LocalContentException e = assertThrows(LocalContentException.class,
-                () -> merge(local(s -> {
-                    clear(s, "assets");
-                    entry(s, "fonts", 0).put("file", "cygnus:font/missing.png");
-                })));
+    void reportsFontWithoutAssetOnLocalSideOfMergedContent() {
+        ContentMerge.Merged result = mergeResult(local(s -> {
+            clear(s, "assets");
+            entry(s, "fonts", 0).put("file", MISSING_LOCATION);
+        }));
 
-        assertMessage(e, "cygnus:font/missing.png", "cygnus:hud_icons", "(local)");
+        assertEquals(1, result.missingAssets().size(), "one missing asset: " + result.missingAssets());
+        ContentMerge.MissingAsset font = result.missingAssets().get(0);
+        assertEquals("local", font.side(), "the font comes from the local side");
+        assertEquals(MISSING_LOCATION, font.location(), "the location the font uses");
+        assertTrue(font.entry().contains("'cygnus:hud_icons'"), "the entry names the font: " + font.entry());
+        assertTrue(font.message().contains("(local) uses resource location '" + MISSING_LOCATION
+                        + "' that has no asset entry"), "warning text: " + font.message());
+    }
+
+    @Test
+    void reportsPublishedSoundWithoutAssetOnPublishedSide() {
+        ContentRelease published = publishedChanged(s -> removeAsset(s, CLICK_ASSET));
+        ContentRelease local = local(s -> {
+            clear(s, "assets");
+            clear(s, "sounds");
+        });
+
+        List<ContentMerge.MissingAsset> missing = ContentMerge.merge(PROJECT, published, local).missingAssets();
+
+        assertEquals(1, missing.size(), "one missing asset: " + missing);
+        assertEquals("published", missing.get(0).side(), "the sound entry is kept from the published side");
+        assertEquals(CLICK_LOCATION, missing.get(0).location(), "the location the sound uses");
+        assertTrue(missing.get(0).entry().contains("'cygnus:ui.click'"), "the entry names the sound: " + missing);
+    }
+
+    @Test
+    void reportsEachReferenceToMissingLocationOnce() {
+        List<ContentMerge.MissingAsset> missing = ContentMerge.checkLocalOnly(PROJECT, local(s -> {
+            removeAsset(s, HUD_ASSET);
+            appendCopyOf(s, "fonts", 0, c -> c.put("id", NEW_ID).put("key", "cygnus:other_icons"));
+        }));
+
+        assertEquals(2, missing.size(), "one report per font that uses the location: " + missing);
+        assertEquals(2, missing.stream().map(ContentMerge.MissingAsset::entry).distinct().count(),
+                "the two fonts are reported as two entries: " + missing);
+        assertTrue(missing.stream().allMatch(m -> m.location().equals(HUD_LOCATION)),
+                "both reports name the shared location: " + missing);
     }
 
     @Test
@@ -250,20 +289,37 @@ final class ContentMergeTest {
     }
 
     @Test
-    void failsOnFontLocationWithoutAssetInLocalOnlySnapshot() {
-        LocalContentException e = assertThrows(LocalContentException.class,
-                () -> ContentMerge.checkLocalOnly(PROJECT, local(s -> {
-                    clear(s, "assets");
-                    entry(s, "fonts", 0).put("file", "cygnus:font/missing.png");
-                })));
+    void reportsFontWithoutAssetInLocalOnlySnapshotAndPasses() {
+        List<ContentMerge.MissingAsset> missing = ContentMerge.checkLocalOnly(PROJECT, local(s -> {
+            removeAsset(s, HUD_ASSET);
+            entry(s, "fonts", 0).put("file", UI_LOCATION);
+        }));
 
-        assertMessage(e, "cygnus:font/missing.png", "cygnus:hud_icons", "(local)");
+        assertEquals(1, missing.size(), "exactly the font is reported: " + missing);
+        ContentMerge.MissingAsset font = missing.get(0);
+        assertEquals(PROJECT, font.project(), "the project");
+        assertEquals("local", font.side(), "every entry of a local-only snapshot is local");
+        assertEquals(UI_LOCATION, font.location(), "the location the font uses");
+        assertTrue(font.entry().contains("'cygnus:hud_icons'"), "the entry names the font: " + font.entry());
     }
 
     @Test
-    void acceptsValidLocalOnlySnapshotWithAdvancementTree() {
-        assertDoesNotThrow(() -> ContentMerge.checkLocalOnly(PROJECT, local(s -> { })),
-                "a complete local snapshot with its advancement tree passes the single-snapshot checks");
+    void failsOnDuplicateKeyNextToMissingAsset() {
+        LocalContentException e = assertThrows(LocalContentException.class,
+                () -> ContentMerge.checkLocalOnly(PROJECT, local(s -> {
+                    removeAsset(s, HUD_ASSET);
+                    appendCopyOf(s, "items", 0, c -> c.put("id", NEW_ID));
+                })));
+
+        assertMessage(e, "key 'cygnus:iron_sword'");
+    }
+
+    @Test
+    void reportsNothingWhenAssetsCoverEveryLocation() {
+        List<ContentMerge.MissingAsset> missing = ContentMerge.checkLocalOnly(PROJECT, local(s -> { }));
+
+        assertTrue(missing.isEmpty(), "a complete local snapshot with its advancement tree reports no missing asset: "
+                + missing);
     }
 
     private static ContentRelease published() {
@@ -325,6 +381,25 @@ final class ContentMergeTest {
 
     private static void clear(ObjectNode snapshot, String list) {
         ((ArrayNode) snapshot.get(list)).removeAll();
+    }
+
+    /** The published release and snapshot with the given change, read without the cross-entry checks. */
+    private static ContentRelease publishedChanged(Consumer<ObjectNode> change) {
+        DataJarFixtures.Metadata metadata = DataJarFixtures.modifySnapshot(releaseJson(), snapshotJson(), change);
+        return ContentReader.readWithoutCrossEntryChecks(PUBLISHED_SOURCE, metadata.releaseJson(),
+                metadata.snapshotJson());
+    }
+
+    /** Removes the asset with the given path from the snapshot. */
+    private static void removeAsset(ObjectNode snapshot, String path) {
+        ArrayNode assets = (ArrayNode) snapshot.get("assets");
+        for (int i = 0; i < assets.size(); i++) {
+            if (path.equals(assets.get(i).get("path").asText())) {
+                assets.remove(i);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("no asset " + path + " in the snapshot");
     }
 
     private static void assertMessage(LocalContentException e, String... fragments) {

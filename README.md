@@ -164,6 +164,7 @@ The local entries are merged over the published data JAR of the same declared pr
 - Entries cannot be deleted. An entry that the local snapshot does not contain stays in the build.
 - `projectId` and `namespace` must equal the published ones. The pack and the release (version, revision and base) come from the local files.
 - The rules that relate entries to each other (unique ids and keys, previous keys, asset paths, expression names, advancement parents) are checked on the merged content. A failure names both entries and whether each one comes from the local or the published side.
+- A resource location that no asset provides (a font's `file`, a sound entry of type `file`, an advancement's `background`) is a warning, not a failure. The build continues, and each reference is logged once with its project, entry, side and location.
 
 For a merged project the Maven artifact is still resolved, because the merge needs the published content, so the repository credentials are still needed. Remove the directory to build from the published content alone. Add `/vulpes/` to `.gitignore`, so that local files are not committed.
 

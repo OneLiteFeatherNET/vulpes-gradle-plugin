@@ -43,9 +43,11 @@ final class LocalContent {
      *                     content is merged over, or the declared version of a local-only project
      * @param content the local release and snapshot, checked for format
      * @param unresolvedReason why the data JAR did not resolve, or {@code null} when it resolved and the content is merged
+     * @param missingAssets references of a local-only project to resource locations without an asset; empty when the
+     *                      content is merged, which checks the merged result instead
      */
     record Served(String project, Path directory, String coordinate, String mavenVersion, ContentRelease content,
-                  String unresolvedReason) {
+                  String unresolvedReason, List<ContentMerge.MissingAsset> missingAssets) {
 
         /** Whether the local directory is the only content of the project. */
         boolean localOnly() {
@@ -98,12 +100,11 @@ final class LocalContent {
                 throw new LocalContentException(name + ": missing " + SNAPSHOT_FILE + "; local content is not merged and the build does not fall back to the data JAR");
             }
             String coordinate = coordinates.get(project);
-            Served local = new Served(project, directory, coordinate, versionOf(coordinate),
-                    read(name, project, directory), reason);
-            if (local.localOnly()) {
-                ContentMerge.checkLocalOnly(project, local.content());
-            }
-            served.add(local);
+            ContentRelease content = read(name, project, directory);
+            List<ContentMerge.MissingAsset> missingAssets = reason != null
+                    ? ContentMerge.checkLocalOnly(project, content) : List.of();
+            served.add(new Served(project, directory, coordinate, versionOf(coordinate), content, reason,
+                    missingAssets));
         }
         if (forbid && !served.isEmpty()) {
             List<String> names = served.stream()

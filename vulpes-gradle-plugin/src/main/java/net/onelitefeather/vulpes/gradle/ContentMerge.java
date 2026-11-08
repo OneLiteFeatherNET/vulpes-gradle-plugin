@@ -39,19 +39,39 @@ final class ContentMerge {
     private static final String PUBLISHED = "published";
 
     /**
-     * The merged content and the number of local entries that replaced a published entry and that were added, counted
-     * over all lists.
+     * The merged content, the number of local entries that replaced a published entry and that were added, counted
+     * over all lists, and the references to resource locations without an asset.
      *
      * @param content the merged release, with the release and pack of the local side
      * @param replaced local entries whose identity exists in the published snapshot
      * @param added local entries whose identity does not exist in the published snapshot
+     * @param missingAssets one entry per reference to a resource location that has no asset
      */
-    record Merged(ContentRelease content, int replaced, int added) {
+    record Merged(ContentRelease content, int replaced, int added, List<MissingAsset> missingAssets) {
+    }
+
+    /**
+     * A reference from an entry to a resource location that no asset of the snapshot provides. It is a warning, not a
+     * failure, so that a local build can be tested before its assets are complete.
+     *
+     * @param project the content project name
+     * @param entry the referencing entry, as {@code kind id 'key'}
+     * @param side the side of the referencing entry, {@code local} or {@code published}
+     * @param location the resource location the entry uses
+     */
+    record MissingAsset(String project, String entry, String side, String location) {
+
+        /** The warning text, without a prefix. */
+        String message() {
+            return project + ": " + entry + " (" + side + ") uses resource location '" + location
+                    + "' that has no asset entry";
+        }
     }
 
     private final String project;
     private final Map<Object, String> sides = new IdentityHashMap<>();
     private final Map<Object, Object> replacedBy = new IdentityHashMap<>();
+    private final List<MissingAsset> missingAssets = new ArrayList<>();
     private int replaced;
     private int added;
 
@@ -95,7 +115,7 @@ final class ContentMerge {
                 mergeList(before.assets(), after.assets(), Asset::path, Asset::path),
                 after.pack());
         check(merged);
-        return new Merged(new ContentRelease(local.release(), merged), replaced, added);
+        return new Merged(new ContentRelease(local.release(), merged), replaced, added, List.copyOf(missingAssets));
     }
 
     /**
@@ -104,9 +124,10 @@ final class ContentMerge {
      *
      * @param project the content project name, for error messages
      * @param local the local release and snapshot of a project that has no published release
+     * @return one entry per reference to a resource location that has no asset
      * @throws LocalContentException if a rule fails
      */
-    static void checkLocalOnly(String project, ContentRelease local) {
+    static List<MissingAsset> checkLocalOnly(String project, ContentRelease local) {
         ContentMerge checker = new ContentMerge(project);
         Snapshot s = local.snapshot();
         for (Object entry : concat(s.items(), s.attributes(), s.fonts(), s.sounds(), s.advancements(),
@@ -114,6 +135,7 @@ final class ContentMerge {
             checker.sides.put(entry, LOCAL);
         }
         checker.check(s);
+        return List.copyOf(checker.missingAssets);
     }
 
     private <T> List<T> mergeList(List<T> published, List<T> local, Function<T, Object> identity,
@@ -233,7 +255,7 @@ final class ContentMerge {
                 return;
             }
         }
-        throw fail(describe(owner) + " uses resource location '" + location + "' that has no asset entry");
+        missingAssets.add(new MissingAsset(project, describeEntry(owner), sides.get(owner), location));
     }
 
     /**
@@ -285,7 +307,11 @@ final class ContentMerge {
     }
 
     private String describe(Object entry) {
-        return kind(entry) + " " + identity(entry) + " '" + label(entry) + "' (" + sides.get(entry) + ")";
+        return describeEntry(entry) + " (" + sides.get(entry) + ")";
+    }
+
+    private String describeEntry(Object entry) {
+        return kind(entry) + " " + identity(entry) + " '" + label(entry) + "'";
     }
 
     private static String kind(Object entry) {

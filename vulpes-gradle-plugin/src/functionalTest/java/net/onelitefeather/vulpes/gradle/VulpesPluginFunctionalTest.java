@@ -56,6 +56,9 @@ final class VulpesPluginFunctionalTest {
     private static final String MANIS = "manis";
     private static final String APPLE_ID = "00000000-0000-0000-0000-0000000000a1";
     private static final String IRON_ID = "12f6f240-843f-5833-8fba-a8ffbe31c173";
+    private static final String HUD_FONT_ID = "f49a3303-350b-5a6a-9494-03b290764a25";
+    private static final String CLICK_SOUND_ID = "3b791b12-7153-5533-a127-62018a7fa823";
+    private static final String ROOT_ADVANCEMENT_ID = "43de1c8a-e912-520a-985d-60ec86891515";
     /** The local snapshot copies every published entry, which counts as replacing it, and adds one item. */
     private static final String REPLACED_AND_ADDED = "14 replaced, 1 added";
     private static final String BASE_COMMIT = "0123456789abcdef0123456789abcdef01234567";
@@ -705,6 +708,42 @@ final class VulpesPluginFunctionalTest {
         assertEquals(TaskOutcome.UP_TO_DATE, outcome(result, ":vulpesGenerate"), "precondition: up to date");
         assertTrue(result.getOutput().contains("no published release used"),
                 "the local-only notice must print on every build:\n" + result.getOutput());
+    }
+
+    @Test
+    void warnsOncePerMissingAssetReferenceAndGeneratesLocalOnlyProject(@TempDir Path dir) throws IOException {
+        Workspace workspace = new Workspace(dir);
+        DataJarFixtures.Metadata local = DataJarFixtures.modifySnapshot(localRelease(SNAPSHOT_VERSION, null),
+                DataJarFixtures.snapshotJson(), snapshot -> ((ArrayNode) snapshot.get("assets")).removeAll());
+        workspace.writeLocal(CYGNUS, local.releaseJson(), local.snapshotJson());
+        workspace.build(SNAPSHOT_DEPENDENCY + "\n" + KEYS_TEMPLATE);
+
+        BuildResult first = workspace.runner("compileJava").build();
+
+        assertEquals(TaskOutcome.SUCCESS, outcome(first, ":compileJava"), "compileJava outcome");
+        assertTrue(Files.isRegularFile(workspace.file(CYGNUS_SOURCE)), "the code is generated despite missing assets");
+        assertMissingAssetWarnings(first.getOutput());
+
+        BuildResult second = workspace.runner("vulpesGenerate").build();
+
+        assertEquals(TaskOutcome.UP_TO_DATE, outcome(second, ":vulpesGenerate"), "precondition: up to date");
+        assertMissingAssetWarnings(second.getOutput());
+    }
+
+    /** One warning per reference to a missing asset: the font, the file sound and the advancement background. */
+    private static void assertMissingAssetWarnings(String output) {
+        assertEquals(3, output.lines().filter(line -> line.contains("has no asset entry")).count(),
+                "one warning per reference:\n" + output);
+        assertTrue(output.contains("vulpes local content: cygnus: font " + HUD_FONT_ID + " 'cygnus:hud_icons' (local)"
+                        + " uses resource location 'cygnus:font/hud_icons.png' that has no asset entry"),
+                "the font warning must name project, entry, side and location:\n" + output);
+        assertTrue(output.contains("vulpes local content: cygnus: sound " + CLICK_SOUND_ID + " 'cygnus:ui.click' (local)"
+                        + " uses resource location 'cygnus:ui/click' that has no asset entry"),
+                "the sound warning must name project, entry, side and location:\n" + output);
+        assertTrue(output.contains("vulpes local content: cygnus: advancement " + ROOT_ADVANCEMENT_ID
+                        + " 'cygnus:root' (local) uses resource location"
+                        + " 'cygnus:textures/gui/advancements/backgrounds/cygnus.png' that has no asset entry"),
+                "the advancement warning must name project, entry, side and location:\n" + output);
     }
 
     @Test

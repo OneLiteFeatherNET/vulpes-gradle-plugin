@@ -61,6 +61,9 @@ public abstract class VulpesLocalContentTask extends DefaultTask {
                     served.project(), served.content().release().version(), served.coordinate(),
                     served.unresolvedReason(), base(served.content().release().base()));
         }
+        for (ContentMerge.MissingAsset missing : content.missingAssets()) {
+            getLogger().warn("vulpes local content: {}", missing.message());
+        }
         for (String ignored : content.ignored()) {
             getLogger().warn("vulpes local content: ignoring {}, no vulpes(...) dependency declares this content project",
                     ignored);
